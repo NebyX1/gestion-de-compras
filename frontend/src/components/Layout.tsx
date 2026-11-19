@@ -12,7 +12,7 @@ interface NavItem {
 }
 
 const ROUTE_TITLES: [string, string][] = [
-  ['/compras', 'Solicitudes y compras'],
+  ['/compras', 'Compras'],
   ['/evaluar', 'Comparar ofertas'],
   ['/reglas', 'Normativa y flujo'],
   ['/auditoria', 'Auditoría'],
@@ -51,9 +51,9 @@ export function Layout() {
   }, [location.pathname]);
 
   const items: NavItem[] = [
-    { to: '/', label: 'Mi escritorio', end: true, visible: can('case.read') },
-    { to: '/compras', label: 'Solicitudes y compras', visible: can('case.read') },
+    { to: '/', label: 'Inicio', end: true, visible: can('dashboard.read') },
     { to: '/evaluar', label: 'Comparar ofertas', visible: can('offer.read') },
+    { to: '/compras', label: 'Compras', visible: can('case.read') },
   ];
   const control: NavItem[] = [
     { to: '/auditoria', label: 'Auditoría', visible: can('audit.read') },
@@ -73,7 +73,6 @@ export function Layout() {
 
   return (
     <>
-      <a className="skip" href="#main">Saltar al contenido</a>
       <aside className={`sidebar ${drawerOpen ? 'open' : ''}`} id="sidebar" aria-label="Navegación principal">
         <Link to="/" className="brand">
           <span className="brand-mark" aria-hidden="true">✓</span>
@@ -83,10 +82,11 @@ export function Layout() {
           </span>
         </Link>
         <nav>
-          <div className="nav-group-label">Tu día a día</div>
           <div className="nav">{renderNav(items)}</div>
-          <div className="nav-group-label" style={{ marginTop: 18 }}>Control y consulta</div>
-          <div className="nav">{renderNav(control)}</div>
+          <details className="nav-tools" open={control.some((item) => item.visible && location.pathname === item.to)}>
+            <summary>Más herramientas</summary>
+            <div className="nav">{renderNav(control)}</div>
+          </details>
         </nav>
         <div className="sidebar-foot">
           Sesión de {ROLE_LABELS[user.roles[0] ?? ''] ?? 'usuario'} · {user.area ?? 'Sin área asignada'}
@@ -111,9 +111,11 @@ export function Layout() {
           <div className="user-chip">
             <span className="avatar" aria-hidden="true">{initials(user.full_name)}</span>
             <span className="name">{user.full_name}</span>
-            <button type="button" className="btn secondary small" onClick={() => void logout()}>
-              Cerrar sesión
-            </button>
+            {!user.is_local_test_user && (
+              <button type="button" className="btn secondary small" onClick={() => void logout()}>
+                Cerrar sesión
+              </button>
+            )}
           </div>
         </header>
         <main id="main" className="content" tabIndex={-1}>

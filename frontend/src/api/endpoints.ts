@@ -135,7 +135,7 @@ export const aiApi = {
   fields: (code: string) => request(api.get<{ items: ExtractedField[]; notice: string }>(`/ai/cases/${encodeURIComponent(code)}/fields`)),
   reviewField: (id: number, body: { action: 'confirm' | 'correct' | 'reject'; value?: string; note?: string }) =>
     request(api.post<ExtractedField>(`/ai/fields/${id}/review`, body)),
-  explain: (code: string) => request(api.post<AiDraft>(`/ai/cases/${encodeURIComponent(code)}/explain`)),
+  explain: (code: string) => request(api.post<AiDraft>(`/ai/cases/${encodeURIComponent(code)}/explain`, { confirm_egress: true })),
   draft: (code: string, kind: 'borrador_dictamen' | 'borrador_analisis', force = false) =>
     request(api.post<AiDraft>(`/ai/cases/${encodeURIComponent(code)}/draft${force ? '?force=1' : ''}`, { kind })),
   inconsistencies: (code: string) =>

@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { casesApi } from '../../api/endpoints';
 import type { EventJson } from '../../api/types';
-import { ErrorNotice, Loading, Notice } from '../ui';
+import { ErrorNotice, Loading } from '../ui';
 import { formatDateTime } from '../../lib/format';
 
 const PAGE_SIZE = 50;
@@ -51,22 +51,5 @@ export function EventsPanel({ code }: { code: string }) {
         </div>
       )}
     </>
-  );
-}
-
-export function AiPanel() {
-  return (
-    <div className="card flat" style={{ marginTop: 18 }}>
-      <h3 className="section-label">Asistente de IA</h3>
-      <Notice tone="blue">
-        La asistencia de IA no está disponible en este entorno. Las acciones de IA quedan deshabilitadas hasta que el
-        administrador la active y configure un modelo válido. Ningún resultado de IA reemplaza la decisión humana.
-      </Notice>
-      <div className="row" style={{ marginTop: 10 }}>
-        <button type="button" className="btn soft small" disabled>Extraer datos de una oferta</button>
-        <button type="button" className="btn soft small" disabled>Explicar el expediente</button>
-        <button type="button" className="btn soft small" disabled>Buscar inconsistencias</button>
-      </div>
-    </div>
   );
 }

@@ -15,6 +15,8 @@ def create_app(test_config=None):
     app.config.update(settings())
     if test_config:
         app.config.update(test_config)
+    if app.config['LOCAL_TEST_AUTH'] and app.config['APP_ENV'] != 'testing':
+        raise RuntimeError('LOCAL_TEST_AUTH solo se permite con APP_ENV=testing.')
     if not app.config.get('SECRET_KEY'):
         raise RuntimeError('Configure SECRET_KEY en el entorno de despliegue (no en el código).')
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
@@ -43,11 +45,21 @@ def create_app(test_config=None):
     for bp in (auth_bp, procurement_bp, documents_bp, organization_bp, rules_bp, audit_bp, admin_bp, integrations_bp, ai_bp):
         app.register_blueprint(bp)
 
-    from app.modules.identity.service import protect_csrf, auth_required
+    from app.modules.identity.service import protect_csrf, auth_required, csrf_token
 
     @app.before_request
     def request_context():
         g.request_id, g.started = str(uuid4()), time.monotonic()
+        if app.config['LOCAL_TEST_AUTH']:
+            from flask import session
+            from flask_login import current_user, login_user
+            from app.modules.identity.testing import get_local_test_user
+            user = get_local_test_user()
+            if not current_user.is_authenticated or current_user.get_id() != user.get_id():
+                session.clear()
+                login_user(user)
+                session.permanent = True
+            csrf_token()
         if request.path.startswith('/api/'):
             protect_csrf()
 

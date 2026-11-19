@@ -7,7 +7,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CasesPage } from './pages/CasesPage';
 import { CaseDetailPage } from './pages/CaseDetailPage';
-import { EvaluatePage } from './pages/EvaluatePage';
+import { ComparisonPage, EvaluatePage } from './pages/EvaluatePage';
 import { RulesPage } from './pages/RulesPage';
 import { AuditPage } from './pages/AuditPage';
 import { AdminPage } from './pages/AdminPage';
@@ -55,7 +55,8 @@ function AuthenticatedRoutes() {
         <Route index element={<RequirePermission permission="dashboard.read"><DashboardPage /></RequirePermission>} />
         <Route path="compras" element={<RequirePermission permission="case.read"><CasesPage /></RequirePermission>} />
         <Route path="compras/:code" element={<RequirePermission permission="case.read"><CaseDetailPage /></RequirePermission>} />
-        <Route path="evaluar" element={<RequirePermission permission="evaluation.read"><EvaluatePage /></RequirePermission>} />
+        <Route path="evaluar" element={<RequirePermission permission="offer.read"><EvaluatePage /></RequirePermission>} />
+        <Route path="evaluar/:code" element={<RequirePermission permission="offer.read"><ComparisonPage /></RequirePermission>} />
         <Route path="reglas" element={<RulesPage />} />
         <Route path="auditoria" element={<RequirePermission permission="audit.read"><AuditPage /></RequirePermission>} />
         <Route path="administracion" element={<RequirePermission anyOf={['admin.users', 'admin.areas', 'admin.rules']}><AdminPage /></RequirePermission>} />

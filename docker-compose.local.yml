@@ -1,6 +1,26 @@
 # Override solo para Docker Desktop: publica el puerto HTTP de la interfaz en localhost.
 # Coolify no usa este archivo; el dominio y HTTPS los gestiona el proxy de Coolify.
 services:
+  migrate:
+    environment:
+      APP_ENV: testing
+      LOCAL_TEST_AUTH: "true"
+    command: ["sh", "-c", "python wait_for_db.py && flask db upgrade && flask seed-base && flask seed-local-test-user"]
+  backend:
+    environment:
+      APP_ENV: testing
+      LOCAL_TEST_AUTH: "true"
+      ALLOW_DEMO_SEED: "true"
+      AI_ENABLED: "true"
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: deepseek-v4.1-flash:cloud
+      OLLAMA_API_KEY: ""
+  worker:
+    environment:
+      AI_ENABLED: "true"
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: deepseek-v4.1-flash:cloud
+      OLLAMA_API_KEY: ""
   web:
     ports:
       - "127.0.0.1:${LOCAL_HTTP_PORT:-8080}:8080"

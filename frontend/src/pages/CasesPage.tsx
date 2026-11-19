@@ -234,13 +234,14 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
     >
       <form id="new-case-form" className="stack" noValidate onSubmit={submit}>
         {apiError && !apiError.fields?.title && <ErrorNotice error={mutation.error} />}
+        <p className="small-text form-note">* Campos obligatorios. Podés crear el borrador y completar el expediente después.</p>
         <div className="field">
-          <label htmlFor="nc-title">Título <span className="req">*</span></label>
+          <label htmlFor="nc-title">¿Qué se va a comprar? <span className="req">*</span></label>
           <input id="nc-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-invalid={fieldError('title') ? 'true' : undefined} />
           <div className="form-error">{fieldError('title')}</div>
         </div>
         <div className="field">
-          <label htmlFor="nc-need">Necesidad <span className="req">*</span></label>
+          <label htmlFor="nc-need">¿Para qué se necesita? <span className="req">*</span></label>
           <textarea id="nc-need" value={needText} onChange={(e) => setNeedText(e.target.value)} aria-invalid={fieldError('need_text') ? 'true' : undefined} />
           <div className="field-help">Qué se necesita, para qué y en qué condiciones.</div>
           <div className="form-error">{fieldError('need_text')}</div>
@@ -272,11 +273,11 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <fieldset className="spec-block" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="section-label">Renglones</legend>
+          <legend className="form-section-label">Productos o servicios</legend>
           {lines.map((line, i) => (
             <div key={i} className="line-row">
               <div className="line-row-head">
-                <strong>Renglón {i + 1}</strong>
+                <strong>Ítem {i + 1}</strong>
                 {lines.length > 1 && (
                   <button type="button" className="text-btn" onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}>Quitar</button>
                 )}
@@ -307,7 +308,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
           <div className="form-error">{fieldError('lines')}</div>
           <div>
             <button type="button" className="btn soft small" onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])} disabled={lines.length >= 100}>
-              Agregar renglón
+              Agregar ítem
             </button>
           </div>
         </fieldset>

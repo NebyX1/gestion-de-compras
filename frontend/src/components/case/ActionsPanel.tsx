@@ -13,45 +13,39 @@ interface ActionsPanelProps {
   version: number;
   actions: ActionInfo[];
   documents: CaseDocument[];
+  nextAction?: string;
 }
 
-export function ActionsPanel({ code, version, actions, documents }: ActionsPanelProps) {
+export function ActionsPanel({ code, version, actions, documents, nextAction }: ActionsPanelProps) {
   const [open, setOpen] = useState<ActionInfo | null>(null);
 
   if (actions.length === 0) {
     return <p className="muted">No hay acciones disponibles para tu rol en esta etapa.</p>;
   }
 
+  const enabled = (action: ActionInfo) => action.can && !action.done && action.blockers.length === 0;
+  const primary = actions.find((a) => a.name === nextAction && enabled(a) && !a.danger);
+  const other = actions.filter((a) => a !== primary);
   return (
-    <>
-      <div className="offer-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-        {actions.map((a) => {
-          const enabled = a.can && a.blockers.length === 0 && !a.done;
-          return (
-            <article key={a.name} className="card" aria-label={a.label}>
-              <div className="card-head">
-                <h3 style={{ margin: 0, fontSize: 15 }}>{a.label}</h3>
-                {a.done ? <Badge tone="green">Hecho</Badge> : a.blockers.length > 0 ? <Badge tone="amber">Bloqueada</Badge> : null}
-              </div>
-              <p className="small-text muted">{a.description}</p>
-              <p className="small-text"><strong>Responsable:</strong> {joinResponsible(a.responsible)}</p>
-              {a.blockers.length > 0 && (
-                <ul className="helper-list small-text">
-                  {a.blockers.map((b) => <li key={b}>{b}</li>)}
-                </ul>
-              )}
-              <button
-                type="button"
-                className={`btn small${a.danger ? ' danger' : ''}`}
-                disabled={!enabled}
-                onClick={() => setOpen(a)}
-              >
-                {a.done ? 'Completada' : a.label}
-              </button>
-            </article>
-          );
-        })}
-      </div>
+    <div className="stack">
+      {primary && <div>
+        <p>{primary.description}</p>
+        <button type="button" className="btn" onClick={() => setOpen(primary)}>{primary.label}</button>
+      </div>}
+      {other.length > 0 && <details className="disclosure">
+        <summary>{primary ? 'Otras acciones' : 'Ver acciones y sus condiciones'} ({other.length})</summary>
+        <ul className="action-list">
+          {other.map((a) => <li key={a.name}>
+            <div>
+              <strong>{a.label}</strong>
+              <p className="small-text">{a.description} · {joinResponsible(a.responsible)}</p>
+              {a.blockers.length > 0 && <ul className="helper-list small-text">{a.blockers.map((b) => <li key={b}>{b}</li>)}</ul>}
+            </div>
+            {enabled(a) ? <button type="button" className={`btn small ${a.danger ? 'danger' : 'secondary'}`} onClick={() => setOpen(a)}>Abrir <span className="sr-only">{a.label}</span></button>
+              : <Badge tone={a.done ? 'green' : 'neutral'}>{a.done ? 'Completada' : 'No disponible'}</Badge>}
+          </li>)}
+        </ul>
+      </details>}
       {open && (
         <ActionModal
           key={open.name}
@@ -62,7 +56,7 @@ export function ActionsPanel({ code, version, actions, documents }: ActionsPanel
           onClose={() => setOpen(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 

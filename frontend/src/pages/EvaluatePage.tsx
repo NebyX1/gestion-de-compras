@@ -1,8 +1,9 @@
-import { useQueries } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router-dom';
 import { casesApi } from '../api/endpoints';
 import type { CaseSummary } from '../api/types';
 import { Badge, Empty, ErrorNotice, Loading } from '../components/ui';
+import { ComparisonPanel } from '../components/case/ComparisonPanel';
 import { formatMoney } from '../lib/format';
 import { STAGE_LABELS } from '../lib/labels';
 
@@ -24,13 +25,11 @@ export function EvaluatePage() {
 
   return (
     <>
-      <header className="page-heading">
+      <header className="comparison-intro">
         <div>
-          <div className="eyebrow">Evaluación</div>
-          <h1>Ofertas por comparar</h1>
-          <p className="muted">
-            Compras con ofertas, en evaluación o en decisión. La recomendación no es una adjudicación.
-          </p>
+          <div className="eyebrow">Compras de Lavalleja</div>
+          <h1>Compará las ofertas</h1>
+          <p>Elegí una compra y mirá qué ofrece cada proveedor, qué requisitos cumple y cuál recomienda el cálculo.</p>
         </div>
       </header>
 
@@ -42,41 +41,48 @@ export function EvaluatePage() {
         </Empty>
       )}
       {!loading && cases.length > 0 && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Compra</th>
-                <th>Etapa</th>
-                <th>Estado</th>
-                <th className="num">Monto estimado</th>
-                <th><span className="sr-only">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {cases.map((c) => (
-                <tr key={c.code}>
-                  <td>
-                    <div className="table-id">{c.code}</div>
-                    <div className="table-title">{c.title}</div>
-                  </td>
-                  <td>{STAGE_LABELS[c.stage] ?? c.stage_label}</td>
-                  <td><Badge tone={c.tone}>{c.status_label}</Badge></td>
-                  <td className="num">{c.estimated_total ? formatMoney(c.estimated_total, c.currency) : '—'}</td>
-                  <td>
-                    <Link to={`/compras/${encodeURIComponent(c.code)}`}>Abrir evaluación</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section className="comparison-grid" aria-label="Compras por comparar">
+          {cases.map((c) => (
+            <Link className="card comparison-case" key={c.code} to={`/evaluar/${encodeURIComponent(c.code)}`}>
+              <div className="row"><Badge tone={c.tone}>{STAGE_LABELS[c.stage] ?? c.stage_label}</Badge>{c.is_demo && <Badge tone="neutral">Ejemplo</Badge>}</div>
+              <span className="small-text">{c.code} · {c.area}</span>
+              <h2>{c.title}</h2>
+              <p>{c.estimated_total ? `Estimado: ${formatMoney(c.estimated_total, c.currency)}` : 'Sin monto estimado'}</p>
+              <strong>Comparar ofertas <span aria-hidden="true">→</span></strong>
+            </Link>
+          ))}
+        </section>
       )}
       {truncated && (
         <p className="small-text muted" style={{ marginTop: 10 }}>
           Se muestran las primeras 50 compras por etapa. Usá el listado de compras para ver el resto.
         </p>
       )}
+    </>
+  );
+}
+
+export function ComparisonPage() {
+  const { code = '' } = useParams();
+  const query = useQuery({ queryKey: ['case', code], queryFn: () => casesApi.get(code) });
+  if (query.isPending) return <Loading />;
+  if (query.isError) return <ErrorNotice error={query.error} />;
+  const purchase = query.data;
+  return (
+    <>
+      <Link to="/evaluar" className="text-btn">← Todas las comparaciones</Link>
+      <header className="page-heading comparison-heading">
+        <div>
+          <div className="eyebrow">{purchase.code} · {purchase.area}</div>
+          <h1>{purchase.title}</h1>
+          <p>{purchase.need_text}</p>
+        </div>
+        <div className="row">
+          {purchase.is_demo && <Badge tone="blue">Datos de prueba</Badge>}
+          <Link className="btn secondary" to={`/compras/${encodeURIComponent(code)}`}>Abrir expediente</Link>
+        </div>
+      </header>
+      <ComparisonPanel key={code} purchase={purchase} />
     </>
   );
 }

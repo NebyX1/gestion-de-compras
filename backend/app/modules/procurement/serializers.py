@@ -3,6 +3,7 @@ from app.extensions import db
 from app.infrastructure.models import *  # noqa: F401,F403
 from app.modules.documents.policies import can_read_content, can_see_metadata, is_sealed
 from app.modules.evaluation import service as evals
+from app.modules.evaluation.explain import offer_decisions
 from app.modules.identity.permissions import find_assignment, active_assignments
 from app.modules.procurement import framework
 from app.modules.procurement.actions.common import current_round, effective_deadline
@@ -126,6 +127,8 @@ def case_detail(user, case, with_actions=True):
     evs = sel(Evaluation, Evaluation.case_id == case.id) if can('evaluation.read') and opened else []
     cur = next((e for e in sorted(evs, key=lambda e: -e.version) if e.status in ('current', 'stale')), None)
     out['evaluation'] = _evaluation_json(cur) if cur else None
+    if sees_offers and cur and cur.status == 'current':
+        out['evaluation']['offer_decisions'] = offer_decisions(cur.result)
     out['evaluations'] = [{'id': e.id, 'version': e.version, 'status': e.status, 'created_at': iso_utc(e.created_at), 'recommended_offer_id': e.recommended_offer_id,
                            'stale_reason': e.stale_reason} for e in sorted(evs, key=lambda e: -e.version)]
     out['opinions'] = [{'id': o.id, 'evaluation_id': o.evaluation_id, 'recommended_offer_id': o.recommended_offer_id, 'reference': o.reference, 'grounds': o.grounds,

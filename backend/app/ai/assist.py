@@ -82,6 +82,27 @@ def rules_explanation_json(ev):
     return json.dumps(ev.result, ensure_ascii=False)[:9000]
 
 
+def anonymous_comparison_json(ev):
+    """Solo estructura del resultado: sin expediente, precios, proveedores ni texto libre."""
+    result = ev.result
+    offers = result['offers']
+    winner = next((offer for offer in offers if offer['id'] == ev.recommended_offer_id), None)
+    cheaper_excluded = bool(winner and winner['totals']['comparable'] is not None and any(
+        offer['status'] == 'excluded' and offer['totals']['comparable'] is not None
+        and Decimal(offer['totals']['comparable']) < Decimal(winner['totals']['comparable'])
+        for offer in offers))
+    return json.dumps({
+        'metodo': result['mode'],
+        'hay_recomendacion': winner is not None,
+        'hay_empate': result['tie'],
+        'hay_ofertas_similares': result['similar'],
+        'hay_ofertas_pendientes': any(offer['status'] == 'pending' for offer in offers),
+        'hay_ofertas_excluidas': any(offer['status'] == 'excluded' for offer in offers),
+        'hay_admisibles': any(offer['status'] == 'admissible' for offer in offers),
+        'hay_excluida_mas_barata_que_la_recomendada': cheaper_excluded,
+    }, ensure_ascii=False)
+
+
 # ---------------------------------------------------------------- inconsistencias y datos faltantes (deterministas)
 
 def inconsistencies(user, case, ctx):

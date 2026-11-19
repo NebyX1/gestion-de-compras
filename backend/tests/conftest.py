@@ -32,7 +32,8 @@ def db_name():
 @pytest.fixture(scope='session')
 def app(db_name):
     docs = tempfile.mkdtemp(prefix='cc-docs-')
-    cfg = {'TESTING': True, 'SQLALCHEMY_DATABASE_URI': f'mysql+pymysql://{APP_USER}@{DB_HOST}/{db_name}?charset=utf8mb4', 'SECRET_KEY': 'tests-only-secret-key-0123456789',
+    cfg = {'TESTING': True, 'APP_ENV': 'testing', 'LOCAL_TEST_AUTH': False,
+           'SQLALCHEMY_DATABASE_URI': f'mysql+pymysql://{APP_USER}@{DB_HOST}/{db_name}?charset=utf8mb4', 'SECRET_KEY': 'tests-only-secret-key-0123456789',
            'LOGIN_CAPTCHA': False, 'AUTH_2FA_REQUIRED': False, 'DOCUMENT_STORAGE': 'local', 'DOCUMENT_ROOT': docs, 'EMBEDDER': 'hash', 'AI_ENABLED': False,
            'MAIL_CAPTURE': [], 'ALLOW_DEMO_SEED': True, 'SESSION_COOKIE_SECURE': False, 'RATE_LIMIT_DISABLED': True}
     os.environ['TZ'] = 'UTC'

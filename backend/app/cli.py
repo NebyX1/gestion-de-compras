@@ -13,6 +13,18 @@ def register_cli(app):
         ensure_base_config()
         click.echo('Configuración base lista.')
 
+    @app.cli.command('seed-local-test-user')
+    def seed_local_test_user():
+        """Crea el usuario sintético local de Compras; disponible solo con LOCAL_TEST_AUTH en testing."""
+        if not app.config.get('LOCAL_TEST_AUTH') or app.config.get('APP_ENV') != 'testing':
+            raise click.ClickException('El usuario local de pruebas solo se crea con LOCAL_TEST_AUTH y APP_ENV=testing.')
+        from app.modules.identity.testing import ensure_local_test_user
+        try:
+            ensure_local_test_user()
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc))
+        click.echo('Usuario sintético local de Compras listo.')
+
     @app.cli.command('create-admin')
     @click.option('--username', required=True)
     @click.option('--email', required=True)
@@ -48,7 +60,7 @@ def register_cli(app):
     @app.cli.command('seed-demo')
     @click.option('--confirm', is_flag=True, help='Confirma que se cargan datos ficticios.')
     def seed_demo(confirm):
-        """Carga los cinco expedientes de ejemplo y usuarios de prueba. Solo con ALLOW_DEMO_SEED=true."""
+        """Carga expedientes ficticios y usuarios de prueba. Solo con ALLOW_DEMO_SEED=true."""
         if not app.config.get('ALLOW_DEMO_SEED'):
             raise click.ClickException('ALLOW_DEMO_SEED no está habilitado: las semillas demo nunca se cargan en producción.')
         if not confirm:

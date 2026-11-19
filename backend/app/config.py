@@ -18,6 +18,7 @@ def settings():
     max_mb = int(os.getenv('MAX_UPLOAD_MB', '10'))
     return dict(
         APP_ENV=os.getenv('APP_ENV', 'production'),
+        LOCAL_TEST_AUTH=flag('LOCAL_TEST_AUTH'),
         SECRET_KEY=os.getenv('SECRET_KEY'),
         SQLALCHEMY_DATABASE_URI=uri,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,

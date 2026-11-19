@@ -3,14 +3,15 @@ import { Link, useParams } from 'react-router-dom';
 import { casesApi } from '../api/endpoints';
 import { Badge, Empty, ErrorNotice, Loading, Notice } from '../components/ui';
 import { ActionsPanel } from '../components/case/ActionsPanel';
-import { AiPanel, EventsPanel } from '../components/case/EventsPanel';
+import { EventsPanel } from '../components/case/EventsPanel';
 import { DocumentsPanel } from '../components/case/DocumentsPanel';
-import { OffersPanel } from '../components/case/OffersPanel';
 import { formatMoney, joinResponsible } from '../lib/format';
 import { PROCEDURE_MODE_LABELS, STAGE_LABELS } from '../lib/labels';
+import { useSession } from '../session';
 
 export function CaseDetailPage() {
   const { code = '' } = useParams();
+  const { can } = useSession();
   const query = useQuery({
     queryKey: ['case', code],
     queryFn: () => casesApi.get(code),
@@ -40,9 +41,14 @@ export function CaseDetailPage() {
         <div className="row">
           <Badge tone={c.tone}>{c.status_label}</Badge>
           {c.is_demo && <Badge tone="amber">Datos de prueba</Badge>}
+          {can('offer.read') && (c.offers.length > 0 || c.offers_sealed || c.evaluation) && (
+            <Link className="btn" to={`/evaluar/${encodeURIComponent(c.code)}`}>Comparar ofertas →</Link>
+          )}
         </div>
       </header>
 
+      <details className="card workflow-details">
+        <summary>Ver etapas de la compra</summary>
       <ol className="stepper" aria-label="Etapas de la compra">
         {stages.map((label, i) => {
           const cls = i < c.stage ? 'step done' : i === c.stage ? 'step now' : 'step';
@@ -54,6 +60,7 @@ export function CaseDetailPage() {
           );
         })}
       </ol>
+      </details>
 
       {c.next && (
         <section className="card next-card" aria-label="Siguiente paso" style={{ marginBottom: 18 }}>
@@ -72,7 +79,7 @@ export function CaseDetailPage() {
             <div className="card-head">
               <h2 id="case-actions">Acciones</h2>
             </div>
-            <ActionsPanel code={c.code} version={c.version} actions={c.actions} documents={c.documents} />
+            <ActionsPanel key={c.code} code={c.code} version={c.version} actions={c.actions} documents={c.documents} nextAction={c.next?.action} />
           </section>
 
           <section className="card flat" aria-labelledby="case-spec">
@@ -113,13 +120,6 @@ export function CaseDetailPage() {
             ) : (
               <Empty title="La especificación todavía no está definida." />
             )}
-          </section>
-
-          <section className="card flat" aria-labelledby="case-offers">
-            <div className="card-head">
-              <h2 id="case-offers">Ofertas y evaluación</h2>
-            </div>
-            <OffersPanel code={c.code} offers={c.offers} offersSealed={c.offers_sealed} evaluation={c.evaluation} />
           </section>
 
           <section className="card flat" aria-labelledby="case-docs">
@@ -164,8 +164,6 @@ export function CaseDetailPage() {
           <section className="card flat" aria-labelledby="case-events">
             <EventsPanel code={c.code} />
           </section>
-
-          <AiPanel />
         </aside>
       </div>
     </>

@@ -8,6 +8,7 @@ export interface User {
   permissions: string[];
   roles: string[];
   must_change_password: boolean;
+  is_local_test_user?: boolean;
 }
 
 export interface Paged<T> {
@@ -215,9 +216,9 @@ export interface EvaluationOfferResult {
   reasons: string[];
   pending: string[];
   warnings: string[];
-  requirements: Record<string, unknown>[];
-  totals: { commercial: string | null; comparable: string | null; currency: string } | null;
-  criteria: Record<string, unknown>[];
+  requirements: { id: number; code: string; result: 'met' | 'not_met' | 'pending'; observed: string | null; treatment: string | null }[];
+  totals: { commercial: string | null; comparable: string | null; currency: string; evaluation_currency: string } | null;
+  criteria: { code: string; name: string; points: string; max: string }[];
   score: string | null;
   score_display: string | null;
   rank: number | null;
@@ -225,6 +226,9 @@ export interface EvaluationOfferResult {
 
 export interface EvaluationResult {
   offers: EvaluationOfferResult[];
+  blocked_reasons: string[];
+  tie: boolean;
+  similar: boolean;
   [key: string]: unknown;
 }
 
@@ -240,6 +244,7 @@ export interface Evaluation {
   created_at: string;
   result: EvaluationResult | null;
   recommended_offer_id: number | null;
+  offer_decisions?: { offer_id: number; title: string; items: string[] }[];
 }
 
 export interface EvaluationHistoryItem {

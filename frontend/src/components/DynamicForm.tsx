@@ -104,6 +104,7 @@ interface FormProps {
 export function DynamicForm({ id, fields, values, onChange, errors, documents, onSubmit }: FormProps) {
   return (
     <form id={id} className="stack" noValidate onSubmit={onSubmit}>
+      {fields.some((field) => field.required) && <p className="small-text form-note">* Campos obligatorios</p>}
       <FieldList fields={fields} values={values} onChange={onChange} errors={errors} path="" documents={documents} />
     </form>
   );
@@ -120,7 +121,7 @@ interface ListProps {
 
 function FieldList({ fields, values, onChange, errors, path, documents }: ListProps) {
   return (
-    <>
+    <div className="form-grid">
       {fields.map((f) => {
         const childPath = path ? `${path}.${f.name}` : f.name;
         return (
@@ -135,7 +136,7 @@ function FieldList({ fields, values, onChange, errors, path, documents }: ListPr
           />
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -170,7 +171,7 @@ function FieldControl({ field: f, value, path, errors, documents, onChange }: Co
 
   if (f.type === 'checkbox') {
     return (
-      <div className="field">
+      <div className="field form-full">
         <label className="check">
           <input
             type="checkbox"
@@ -225,7 +226,7 @@ function FieldControl({ field: f, value, path, errors, documents, onChange }: Co
   }
 
   return (
-    <div className="field">
+    <div className={`field${f.type === 'textarea' ? ' form-full' : ''}`}>
       <label htmlFor={controlId}>{label}</label>
       {control}
       {f.help && <div className="field-help" id={helpId}>{f.help}</div>}
@@ -246,7 +247,7 @@ interface LinesProps {
 function LinesEditor({ field, rows, path, errors, documents, onChange }: LinesProps) {
   const error = errors[path];
   return (
-    <fieldset className="field">
+    <fieldset className="field form-full">
       <legend>
         {field.label}
         {field.required && <span className="req" aria-hidden="true"> *</span>}

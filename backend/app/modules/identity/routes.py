@@ -11,6 +11,7 @@ from app.infrastructure.models import User, TwoFactorCode
 from app.modules.identity import mailer
 from app.modules.identity.permissions import user_permissions
 from app.modules.identity.service import (auth_required, csrf_token, rate_limit, validate_password)
+from app.modules.identity.testing import LOCAL_TEST_USERNAME
 from app.shared.contracts import utcnow
 from app.shared.errors import ApiError, require
 
@@ -27,7 +28,8 @@ def user_json(user):
     perms, roles = user_permissions(user)
     return {'id': user.id, 'username': user.username, 'email': user.email, 'full_name': user.full_name,
             'area_id': user.area_id, 'area': user.area.name if user.area else None, 'permissions': perms, 'roles': roles,
-            'must_change_password': user.must_change_password}
+            'must_change_password': user.must_change_password,
+            'is_local_test_user': bool(current_app.config['LOCAL_TEST_AUTH'] and user.username == LOCAL_TEST_USERNAME)}
 
 
 @bp.get('/challenge')
@@ -52,8 +54,14 @@ def _fail_login(user, email):
     raise ApiError('invalid_credentials', 'Credenciales inválidas o cuenta bloqueada temporalmente.', 401)
 
 
+def _reject_login_in_local_test_mode():
+    if current_app.config['LOCAL_TEST_AUTH']:
+        raise ApiError('local_test_mode', 'El acceso ya está habilitado para el usuario local de pruebas.', 403)
+
+
 @bp.post('/login')
 def login():
+    _reject_login_in_local_test_mode()
     rate_limit('login', 10)
     data = request.get_json(silent=True)
     require(isinstance(data, dict), 'invalid_json', 'Datos inválidos.', 422)
@@ -105,6 +113,7 @@ def _finish_login(user):
 
 @bp.post('/verify-2fa')
 def verify_2fa():
+    _reject_login_in_local_test_mode()
     rate_limit('verify2fa', 10)
     data = request.get_json(silent=True) or {}
     code = data.get('code', '') if isinstance(data, dict) else ''

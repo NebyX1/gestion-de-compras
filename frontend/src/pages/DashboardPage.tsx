@@ -18,12 +18,13 @@ export function DashboardPage() {
 
   return (
     <>
-      <header className="page-heading">
+      <header className="comparison-intro">
         <div>
-          <div className="eyebrow">Escritorio</div>
-          <h1>Compras en movimiento</h1>
-          <p className="muted">Hola, {first}. Estas son las compras que siguen abiertas y lo que necesitan de vos.</p>
+          <div className="eyebrow">Compra Clara · Lavalleja</div>
+          <h1>Compras más fáciles de entender</h1>
+          <p>Hola, {first}. Encontrá tus compras y revisá sus ofertas en un solo lugar.</p>
         </div>
+        {user.permissions.includes('offer.read') && <Link className="btn" to="/evaluar">Comparar ofertas →</Link>}
       </header>
 
       <section className="stats-grid" aria-label="Resumen">

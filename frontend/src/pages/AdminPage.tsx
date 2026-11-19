@@ -12,7 +12,7 @@ type TabKey = 'users' | 'areas' | 'segregation' | 'holidays';
 const TABS: { key: TabKey; label: string; permission: string }[] = [
   { key: 'users', label: 'Usuarios', permission: 'admin.users' },
   { key: 'areas', label: 'Áreas', permission: 'admin.areas' },
-  { key: 'segregation', label: 'Segregación de funciones', permission: 'admin.users' },
+  { key: 'segregation', label: 'Separación de funciones', permission: 'admin.users' },
   { key: 'holidays', label: 'Feriados', permission: 'admin.rules' },
 ];
 
@@ -39,17 +39,17 @@ export function AdminPage() {
 
   return (
     <>
-      <header className="page-heading">
+      <header className="comparison-intro">
         <div>
-          <div className="eyebrow">Administración</div>
+          <div className="eyebrow">Configuración del sistema</div>
           <h1>Administración</h1>
-          <p className="muted">Accesos, áreas, competencias y reglas de segregación. La cuenta de administración no adquiere competencia para adjudicar, autorizar ni pagar.</p>
+          <p>Gestioná quién puede acceder, las áreas, las reglas de separación de funciones y el calendario.</p>
         </div>
       </header>
 
-      <div className="pill-tabs" role="group" aria-label="Secciones de administración" style={{ marginBottom: 16 }}>
+      <div className="admin-section-links" role="group" aria-label="Secciones de administración">
         {visible.map((tab) => (
-          <button key={tab.key} type="button" aria-pressed={current === tab.key} onClick={() => setSelected(tab.key)}>
+          <button className="card" key={tab.key} type="button" aria-pressed={current === tab.key} onClick={() => setSelected(tab.key)}>
             {tab.label}
           </button>
         ))}
@@ -154,7 +154,9 @@ function UsersTab() {
                       </div>
                     </td>
                     <td>
-                      <div className="row">
+                      <details className="disclosure admin-actions">
+                        <summary>Gestionar <span className="sr-only">{u.full_name}</span></summary>
+                        <div className="row">
                         <button
                           type="button"
                           className={`btn small ${u.active ? 'danger' : 'success'}`}
@@ -173,7 +175,8 @@ function UsersTab() {
                           Restablecer contraseña
                         </button>
                         <button type="button" className="btn small soft" onClick={() => setAssigning(u)}>Asignar rol</button>
-                      </div>
+                        </div>
+                      </details>
                     </td>
                   </tr>
                 );
@@ -518,7 +521,7 @@ function AreasTab() {
   }
 
   return (
-    <div className="two-col">
+    <div className="two-col admin-panels">
       <section className="card">
         <div className="card-head"><h2>Áreas</h2></div>
         {areas.isPending && <Loading />}
@@ -703,11 +706,8 @@ function HolidaysTab() {
   return (
     <div className="two-col">
       <section className="card">
-        <div className="card-head"><h2>Feriados</h2></div>
-        <Notice tone="blue">Esta pantalla solo registra feriados nuevos. La lista vigente no se muestra aquí todavía; si un feriado ya existe, el registro no lo duplica.</Notice>
-      </section>
-      <section className="card">
         <div className="card-head"><h2>Nuevo feriado</h2></div>
+        <p>Registrá un feriado para el calendario de compras. Si la fecha ya existe, no se duplica.</p>
         <form className="stack" noValidate onSubmit={submit}>
           <div className="field">
             <label htmlFor="hol-day">Fecha <span className="req">*</span></label>

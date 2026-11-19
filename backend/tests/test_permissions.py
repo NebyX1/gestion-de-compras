@@ -1,5 +1,6 @@
 """Permisos por acción y por recurso, competencia vigente, delegaciones y segregación de funciones."""
 from datetime import datetime, timedelta, timezone
+import pytest
 from tests.flow import Journey, key
 
 
@@ -27,6 +28,49 @@ def login_as(app, user_json, password):
 def assign(api, user, role, **kw):
     r = admin_post(api, f'/api/v1/admin/users/{user["user"]["id"]}/assignments', {'role': role, **kw})
     return r
+
+
+def test_local_test_auth_is_disabled_by_default(app):
+    assert app.config['LOCAL_TEST_AUTH'] is False
+    response = app.test_client().get('/api/v1/auth/me')
+    assert response.status_code == 401
+
+
+def test_local_test_auth_requires_testing_environment():
+    from app import create_app
+
+    with pytest.raises(RuntimeError, match='APP_ENV=testing'):
+        create_app({'LOCAL_TEST_AUTH': True, 'APP_ENV': 'production'})
+
+
+def test_local_test_auth_uses_synthetic_compras_user(app):
+    from app.modules.identity.testing import ensure_local_test_user, LOCAL_TEST_EMAIL
+
+    original_testing = app.config['APP_ENV']
+    original_local_auth = app.config['LOCAL_TEST_AUTH']
+    try:
+        app.config.update(APP_ENV='testing', LOCAL_TEST_AUTH=True)
+        with app.app_context():
+            ensure_local_test_user()
+
+        client = app.test_client()
+        response = client.get('/api/v1/auth/me')
+        assert response.status_code == 200
+        body = response.get_json()
+        assert body['user']['email'] == LOCAL_TEST_EMAIL
+        assert body['user']['area'] == 'Pruebas locales'
+        assert body['user']['is_local_test_user'] is True
+        assert 'case.create' in body['user']['permissions']
+        assert 'admin.users' not in body['user']['permissions']
+        login = client.post(
+            '/api/v1/auth/login',
+            json={},
+            headers={'X-CSRF-Token': body['csrf_token']},
+        )
+        assert login.status_code == 403
+        assert login.get_json()['code'] == 'local_test_mode'
+    finally:
+        app.config.update(APP_ENV=original_testing, LOCAL_TEST_AUTH=original_local_auth)
 
 
 def test_auditor_is_read_only(app, api, world):

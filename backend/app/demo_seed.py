@@ -1,4 +1,4 @@
-"""Semilla demo: usuarios de prueba por rol y los cinco expedientes del modelo HTML, cargados solo con servicios y acciones reales.
+"""Semilla demo: usuarios de prueba por rol y expedientes ficticios, cargados solo con servicios y acciones reales.
 
 La invoca únicamente la CLI `seed-demo` con ALLOW_DEMO_SEED=true. Todo lo creado lleva is_demo=True y códigos DEMO-;
 volver a ejecutarla no duplica usuarios, proveedores ni expedientes.
@@ -10,11 +10,12 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.infrastructure import audit
-from app.infrastructure.models import Area, ProcurementCase, RequestLine, Supplier, SupplierStatus, User, UserRole
+from app.infrastructure.models import (Area, Evaluation, Offer, ProcurementCase, RequestLine, RequirementReview,
+                                       SpecRequirement, SpecVersion, Supplier, SupplierStatus, User, UserRole)
 from app.modules.identity.permissions import ROLE_NAMES
 from app.modules.identity.service import validate_password
 from app.modules.procurement import framework
-from app.modules.procurement.service import create_case
+from app.modules.procurement.service import create_case, spec_hash
 from app.bootstrap import ensure_base_config
 from app.shared.contracts import utcnow
 from app.shared.errors import ApiError
@@ -22,7 +23,8 @@ from app.shared.errors import ApiError
 PASSWORD_ALPHABET = string.ascii_letters + string.digits + '!@#$%^&*-_'
 DEMO_LEGAL_BASIS = 'Delegación ficticia para datos de demostración'
 
-AREAS = {'Alumbrado público': 'DEMO-ALUM', 'Servicios generales': 'DEMO-SERV', 'Administración': 'DEMO-ADM', 'Vialidad': 'DEMO-VIAL'}
+AREAS = {'Alumbrado público': 'DEMO-ALUM', 'Servicios generales': 'DEMO-SERV', 'Administración': 'DEMO-ADM', 'Vialidad': 'DEMO-VIAL',
+         'Pruebas locales': 'LOCAL-TEST'}
 
 SUPPLIERS = [
     ('Serrana Iluminación · demo', 'DEMO-PRV-01', 'DEMO-100001'),
@@ -33,6 +35,18 @@ SUPPLIERS = [
     ('Papel y Punto · demo', 'DEMO-PRV-06', 'DEMO-100006'),
     ('Áridos Serranos · demo', 'DEMO-PRV-07', 'DEMO-100007'),
     ('Cantera del Este · demo', 'DEMO-PRV-08', 'DEMO-100008'),
+    ('Red Serrana · demo', 'DEMO-PRV-09', 'DEMO-100009'),
+    ('Nexo Digital · demo', 'DEMO-PRV-10', 'DEMO-100010'),
+    ('Equipos del Este · demo', 'DEMO-PRV-11', 'DEMO-100011'),
+    ('Aula Técnica · demo', 'DEMO-PRV-12', 'DEMO-100012'),
+    ('Horizonte Informático · demo', 'DEMO-PRV-13', 'DEMO-100013'),
+    ('Señal Vial Serrana · demo', 'DEMO-PRV-14', 'DEMO-100014'),
+    ('Camino Seguro · demo', 'DEMO-PRV-15', 'DEMO-100015'),
+    ('Reflectiva del Este · demo', 'DEMO-PRV-16', 'DEMO-100016'),
+    ('Taller de Minas · demo', 'DEMO-PRV-17', 'DEMO-100017'),
+    ('Mecánica del Parque · demo', 'DEMO-PRV-18', 'DEMO-100018'),
+    ('Motores del Valle · demo', 'DEMO-PRV-19', 'DEMO-100019'),
+    ('Servicio Móvil Serrano · demo', 'DEMO-PRV-20', 'DEMO-100020'),
 ]
 
 IP66_MINIMUM = 'IP66, al menos 14.000 lm, garantía mínima de 24 meses y entrega en hasta 30 días corridos.'
@@ -59,12 +73,92 @@ CASES = [
      'budget': 880000000, 'procedure': 'licitacion_abreviada', 'mode': 'min_price', 'minimum': 'Granulometría conforme; entrega en hasta 30 días y garantía de conformidad contractual.',
      'credit_ref': 'PRE-DEMO-2046', 'stage': 4, 'num': '46', 'offers': [('Áridos Serranos · demo', 630000), ('Cantera del Este · demo', 650000)],
      'omitted': 'Apertura, precios de ofertas, evaluación, dictamen, control observado (OBS-DEMO-46), adjudicación y pasos posteriores: la apertura exige plazo vencido, que la semilla no fuerza.'},
+    {'html_id': 'DEMO-OFERTAS', 'title': 'Luminarias LED para el área de pruebas', 'area': 'Pruebas locales', 'quantity': 120, 'unit': 'unidades',
+     'budget': 2200000, 'procedure': 'licitacion_abreviada', 'mode': 'weighted', 'minimum': IP66_MINIMUM, 'min_warranty': 24, 'max_days': 30,
+     'credit_ref': 'PRE-DEMO-OFERTAS', 'stage': 4, 'num': '47',
+     'offers': [('Serrana Iluminación · demo', 12500), ('Luz del Este · demo', 11500), ('Faro Económico · demo', 10000)],
+     'offer_comparison': [
+         {'supplier': 'Serrana Iluminación · demo', 'unit_price': '12500', 'freight': '0', 'delivery_days': 10, 'warranty_months': 60, 'technical': 'met'},
+         {'supplier': 'Luz del Este · demo', 'unit_price': '11500', 'freight': '20400', 'delivery_days': 20, 'warranty_months': 36, 'technical': 'met'},
+         {'supplier': 'Faro Económico · demo', 'unit_price': '10000', 'freight': '36000', 'delivery_days': 15, 'warranty_months': 12, 'technical': 'not_met'}],
+     'omitted': 'Evaluación calculada con tres ofertas ficticias; la adjudicación queda pendiente para probar el flujo.'},
+    {'html_id': 'DEMO-VESTUARIO', 'title': 'Uniformes para cuadrillas municipales', 'area': 'Pruebas locales',
+     'quantity': 300, 'unit': 'conjuntos', 'budget': 1200000, 'procedure': 'compra_directa', 'mode': 'min_price',
+     'minimum': 'Tela de trabajo reforzada y disponibilidad de los talles solicitados.',
+     'credit_ref': 'PRE-DEMO-48', 'stage': 4, 'num': '48',
+     'offers': [('Textil de la Sierra · demo', 2250), ('Vestir Trabajo · demo', 2400), ('Papel y Punto · demo', 2100)],
+     'offer_comparison': [
+         {'supplier': 'Textil de la Sierra · demo', 'unit_price': '2250', 'freight': '60000', 'delivery_days': 12, 'warranty_months': 12, 'technical': 'met'},
+         {'supplier': 'Vestir Trabajo · demo', 'unit_price': '2400', 'freight': '0', 'delivery_days': 18, 'warranty_months': 18, 'technical': 'met'},
+         {'supplier': 'Papel y Punto · demo', 'unit_price': '2100', 'freight': '0', 'delivery_days': 20, 'warranty_months': 12,
+          'technical': 'not_met', 'note': 'La muestra ficticia no acredita la tela reforzada solicitada.'}],
+     'omitted': 'Comparación por importe total: el flete cambia el orden de las ofertas admisibles.'},
+    {'html_id': 'DEMO-CAMINERIA', 'title': 'Gravilla para caminos vecinales', 'area': 'Pruebas locales',
+     'quantity': 240, 'unit': 'toneladas', 'budget': 850000, 'procedure': 'compra_directa', 'mode': 'min_price',
+     'minimum': 'La granulometría debe acreditarse con una ficha técnica.',
+     'credit_ref': 'PRE-DEMO-49', 'stage': 4, 'num': '49',
+     'offers': [('Áridos Serranos · demo', 2150), ('Cantera del Este · demo', 2030)],
+     'offer_comparison': [
+         {'supplier': 'Áridos Serranos · demo', 'unit_price': '2150', 'freight': '0', 'delivery_days': 8, 'warranty_months': 6, 'technical': 'met'},
+         {'supplier': 'Cantera del Este · demo', 'unit_price': '2030', 'freight': '0', 'delivery_days': 14, 'warranty_months': 6, 'technical': 'pending'}],
+     'omitted': 'Sin recomendación porque falta revisar la ficha técnica de una oferta.'},
+    {'html_id': 'DEMO-PAPEL', 'title': 'Resmas de papel para oficinas', 'area': 'Pruebas locales',
+     'quantity': 500, 'unit': 'resmas', 'budget': 300000, 'procedure': 'compra_directa', 'mode': 'min_price',
+     'minimum': 'Papel A4 de 80 g/m², en resmas de 500 hojas.',
+     'credit_ref': 'PRE-DEMO-50', 'stage': 4, 'num': '50',
+     'offers': [('Papel y Punto · demo', 320), ('Textil de la Sierra · demo', 300)],
+     'offer_comparison': [
+         {'supplier': 'Papel y Punto · demo', 'unit_price': '320', 'freight': '0', 'delivery_days': 5, 'warranty_months': 3, 'technical': 'met'},
+         {'supplier': 'Textil de la Sierra · demo', 'unit_price': '300', 'freight': '12200', 'delivery_days': 9, 'warranty_months': 3, 'technical': 'met'}],
+     'omitted': 'Empate exacto en el importe comparable; los plazos no son criterio de desempate.'},
+]
+
+
+def _comparison_case(num, key, title, quantity, unit, budget, minimum, quotes, *, weighted=False):
+    return {
+        'html_id': f'DEMO-{key}', 'title': title, 'area': 'Pruebas locales', 'quantity': quantity, 'unit': unit,
+        'budget': budget, 'procedure': 'compra_directa', 'mode': 'weighted' if weighted else 'min_price',
+        'minimum': minimum, 'min_warranty': 24, 'max_days': 30,
+        'credit_ref': f'PRE-DEMO-{num}', 'stage': 4, 'num': str(num),
+        'offers': [(f'{name} · demo', price) for name, price, *_ in quotes],
+        'offer_comparison': [
+            {'supplier': f'{name} · demo', 'unit_price': str(price), 'freight': str(freight),
+             'delivery_days': days, 'warranty_months': warranty, 'technical': status, 'note': note}
+            for name, price, freight, days, warranty, status, note in quotes
+        ],
+        'omitted': 'Sin adjudicación ni documentos adjuntos.',
+    }
+
+
+CASES += [
+    _comparison_case(51, 'INFORMATICA', 'Equipos informáticos para atención ciudadana', 18, 'equipos', 1000000,
+                     'SSD de al menos 512 GB y memoria RAM de al menos 16 GB.', [
+        ('Red Serrana', 36000, 0, 10, 60, 'met', None),
+        ('Nexo Digital', 33500, 0, 20, 36, 'met', None),
+        ('Equipos del Este', 38000, 15000, 8, 24, 'met', None),
+        ('Aula Técnica', 36500, 0, 24, 60, 'met', None),
+        ('Horizonte Informático', 31500, 0, 12, 36, 'not_met', 'La ficha cotizada indica 8 GB de memoria RAM.'),
+    ], weighted=True),
+    _comparison_case(52, 'SENALIZACION', 'Señales reflectivas para cruces escolares', 60, 'señales', 450000,
+                     'Lámina retrorreflectiva clase II y chapa galvanizada.', [
+        ('Señal Vial Serrana', 4900, 8000, 12, 24, 'met', None),
+        ('Camino Seguro', 4700, 28000, 10, 24, 'met', None),
+        ('Reflectiva del Este', 5100, 0, 8, 36, 'met', None),
+        ('Áridos Serranos', 5200, 12000, 19, 24, 'met', None),
+        ('Cantera del Este', 4200, 0, 21, 12, 'not_met', 'La lámina indicada es de clase I.'),
+    ]),
+    _comparison_case(53, 'TALLER', 'Mantenimiento de camiones recolectores', 4, 'servicios', 700000,
+                     'El mantenimiento debe incluir diagnóstico, repuestos y prueba de frenos.', [
+        ('Taller de Minas', 98000, 0, 14, 12, 'not_met', 'La cotización excluye los repuestos.'),
+        ('Mecánica del Parque', 105000, 0, 10, 18, 'not_met', 'No incluye prueba de frenos.'),
+        ('Motores del Valle', 110000, 0, 20, 24, 'not_met', 'El diagnóstico se cobra aparte.'),
+        ('Servicio Móvil Serrano', 90000, 12000, 9, 6, 'not_met', 'Solo cotiza el diagnóstico.'),
+    ]),
 ]
 
 GENERAL_OMISSIONS = [
     'Documentos adjuntos del modelo (solicitud, pliego, actas): requieren almacenamiento de archivos.',
-    'Apertura de ofertas y registro de precios: exigen plazo vencido; la semilla no altera fechas con SQL.',
-    'Evaluación, dictámenes, control, adjudicación, comunicación, contrato, orden, recepciones y facturas: dependen de la apertura.',
+    'Los ejemplos del área Pruebas locales incluyen apertura y evaluación ficticias, sin adjudicación.',
 ]
 
 
@@ -102,7 +196,7 @@ def _ensure_areas():
     for html_name, code in AREAS.items():
         area = db.session.scalar(db.select(Area).filter_by(code=code))
         if area is None:
-            area = Area(code=code, name=f'{html_name} (demo)', active=True)
+            area = Area(code=code, name=html_name if code == 'LOCAL-TEST' else f'{html_name} (demo)', active=True)
             db.session.add(area)
             db.session.commit()
         areas[html_name] = area
@@ -180,6 +274,67 @@ def _steps(c, suppliers, line_id, now):
     return steps
 
 
+def _ensure_demo_comparison(case, users, suppliers, line_id, quotes):
+    spec = db.session.scalar(db.select(SpecVersion).where(
+        SpecVersion.case_id == case.id, SpecVersion.status == 'approved'))
+    if spec is None:
+        raise RuntimeError(f'El expediente demo {case.code} no tiene un pliego aprobado.')
+
+    if case.status == 'receiving_offers':
+        if spec.offer_deadline and spec.offer_deadline > utcnow():
+            previous = spec.offer_deadline
+            spec.offer_deadline = utcnow() - timedelta(seconds=1)
+            spec.content_hash = spec_hash(spec)
+            audit.record(None, 'demo.deadline_simulated', 'case', case.id, case=case,
+                         reason='Avance de reloj exclusivo de la semilla local para abrir ofertas ficticias.',
+                         reference=case.code, details={'previous_deadline': previous.isoformat(),
+                                                       'simulated_deadline': spec.offer_deadline.isoformat()})
+            db.session.commit()
+        framework.execute(case.code, 'opening.perform', {
+            'reference': f'ACTA-DEMO-{case.code}',
+            'participants': 'Compras · usuario demo\nRecepción · usuario demo',
+            'notes': 'Apertura ficticia preparada para probar la evaluación local.'}, users['compras'])
+
+    if case.status not in ('offers_opened', 'evaluation'):
+        return
+
+    offers = db.session.scalars(db.select(Offer).where(Offer.case_id == case.id)).all()
+    requirement = db.session.scalar(db.select(SpecRequirement).where(
+        SpecRequirement.spec_version_id == spec.id, SpecRequirement.kind == 'review').order_by(SpecRequirement.position))
+    if requirement is None:
+        raise RuntimeError(f'El expediente demo {case.code} no tiene un requisito revisable.')
+
+    for quote in quotes:
+        supplier = suppliers[quote['supplier']]
+        offer = next((row for row in offers if row.supplier_id == supplier.id), None)
+        if offer is None:
+            raise RuntimeError(f'Falta el sobre ficticio de {quote["supplier"]} en {case.code}.')
+        if offer.data_version == 0:
+            framework.execute(case.code, 'offer.record', {
+                'offer_id': offer.id,
+                'currency': case.currency,
+                'prices_include_tax': False,
+                'lines': [{'request_line_id': line_id, 'unit_price': quote['unit_price'], 'tax_rate': '22'}],
+                'freight': quote['freight'],
+                'freight_includes_tax': True,
+                'delivery_days': quote['delivery_days'],
+                'warranty_months': quote['warranty_months'],
+                'delivery_terms': 'Entregado en depósito departamental',
+                'reason': 'Cotización ficticia de demostración; valores preparados para testing.'}, users['tecnica'])
+        if quote['technical'] != 'pending' and not db.session.scalar(db.select(RequirementReview.id).where(
+            RequirementReview.offer_id == offer.id, RequirementReview.requirement_id == requirement.id)):
+            note = quote.get('note') or ('Ficha técnica ficticia: acredita los requisitos publicados.' if quote['technical'] == 'met'
+                                        else 'Ficha técnica ficticia: no acredita la garantía mínima de 24 meses.')
+            framework.execute(case.code, 'requirement.review', {
+                'offer_id': offer.id, 'requirement_id': requirement.id, 'result': quote['technical'],
+                'treatment': 'no_subsanable' if quote['technical'] == 'not_met' else None,
+                'note': note}, users['tecnica'])
+
+    if not db.session.scalar(db.select(Evaluation.id).where(
+        Evaluation.case_id == case.id, Evaluation.status == 'current')):
+        framework.execute(case.code, 'evaluation.run', {}, users['tecnica'])
+
+
 def _ensure_cases(users, areas, suppliers):
     reports = []
     now = datetime.now(timezone.utc)
@@ -187,6 +342,9 @@ def _ensure_cases(users, areas, suppliers):
         need_text = f"Expediente de demostración {c['html_id']} (datos ficticios): {c['title']}."
         existing = db.session.scalar(db.select(ProcurementCase).filter_by(is_demo=True, need_text=need_text))
         if existing is not None:
+            line_id = db.session.scalar(db.select(RequestLine.id).where(RequestLine.case_id == existing.id))
+            if c.get('offer_comparison'):
+                _ensure_demo_comparison(existing, users, suppliers, line_id, c['offer_comparison'])
             reports.append({'html_id': c['html_id'], 'code': existing.code, 'title': c['title'], 'status': 'ya existía', 'omitted': c['omitted']})
             continue
         try:
@@ -211,6 +369,13 @@ def _ensure_cases(users, areas, suppliers):
                 db.session.rollback()
                 failure = f'{action}: {exc.code}'
                 break
+        if failure is None and c.get('offer_comparison'):
+            try:
+                _ensure_demo_comparison(case, users, suppliers, line_id, c['offer_comparison'])
+                done += len(c['offer_comparison']) * 2 + 2
+            except ApiError as exc:
+                db.session.rollback()
+                failure = f'evaluation.run: {exc.code}'
         reports.append({'html_id': c['html_id'], 'code': code, 'title': c['title'], 'status': f'pasos ejecutados: {done}', 'failure': failure, 'omitted': c['omitted']})
     return reports
 

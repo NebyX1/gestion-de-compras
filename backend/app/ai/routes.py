@@ -147,17 +147,22 @@ def _current_ev(case):
     return ev
 
 
-def _draft_flow(code, kind, instruction):
+def _draft_flow(code, kind, instruction, *, anonymous=False):
     rate_limit('ai-draft', 10)
     case = get_case(current_user, code)
     require(find_assignment(current_user, 'ai.use', case.area_id) and find_assignment(current_user, 'evaluation.read', case.area_id), 'forbidden', 'Sin permiso.', 403)
+    if anonymous:
+        require(find_assignment(current_user, 'offer.read', case.area_id), 'forbidden', 'Sin permiso para ver las ofertas.', 403)
+        body = request.get_json(silent=True)
+        require(isinstance(body, dict) and body.get('confirm_egress') is True, 'validation', 'Confirmá el envío del resumen anónimo al proveedor de IA.', 422)
     ev = _current_ev(case)
     force = request.args.get('force') == '1'
     existing = db.session.scalar(db.select(AiDraft).where(AiDraft.case_id == case.id, AiDraft.kind == kind, AiDraft.evaluation_id == ev.id).order_by(AiDraft.id.desc()))
     if existing and not force:
         return jsonify(assist.draft_json(existing))  # evita llamadas duplicadas por recargar la página
     try:
-        draft, _ = assist.generate_text(current_user, case, kind, instruction, assist.rules_explanation_json(ev), ev)
+        source = assist.anonymous_comparison_json(ev) if anonymous else assist.rules_explanation_json(ev)
+        draft, _ = assist.generate_text(current_user, case, kind, instruction, source, ev)
     except client.ProviderError as exc:
         raise _unavailable(exc)
     except Exception as exc:
@@ -170,7 +175,7 @@ def _draft_flow(code, kind, instruction):
 @bp.post('/cases/<code>/explain')
 @auth_required
 def explain_with_ai(code):
-    return _draft_flow(code, 'explicacion', 'Explicá en lenguaje claro por qué el cálculo arroja esta recomendación, qué ofertas quedaron fuera y por qué, y qué debe revisar una persona. Máximo 250 palabras.')
+    return _draft_flow(code, 'explicacion_comparativa', 'En hasta dos párrafos, explicá en lenguaje simple qué significa el resultado anónimo de la comparación, cómo influye el método del pliego y qué debería verificar la persona. Si no hay recomendación no propongas una. No inventes nombres, importes ni causas no informadas.', anonymous=True)
 
 
 @bp.post('/cases/<code>/draft')
