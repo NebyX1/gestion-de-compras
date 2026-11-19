@@ -39,6 +39,8 @@ export function CaseDetailPage() {
           </p>
         </div>
         <div className="row">
+          {c.publicity?.some((entry) => entry.state === 'portal' && entry.kind === 'convocatoria') &&
+            <Link className="btn secondary" to={`/licitaciones/${encodeURIComponent(c.code)}`}>Ver licitación pública</Link>}
           <Badge tone={c.tone}>{c.status_label}</Badge>
           {c.is_demo && <Badge tone="amber">Datos de prueba</Badge>}
           {can('offer.read') && (c.offers.length > 0 || c.offers_sealed || c.evaluation) && (

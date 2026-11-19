@@ -104,7 +104,7 @@ def parse_spec(data, case_currency='UYU'):
         'similarity_margin': inp.decimal(spec, 'similarity_margin', 'Margen de similitud', required=False, positive=False, default=Decimal('0.05'), maximum=1),
         'requirements': parse_requirements(spec.get('requirements')), 'criteria': parse_criteria(mode, spec.get('criteria')),
         'offer_deadline': inp.moment(spec, 'offer_deadline', 'Plazo de recepción', required=False),
-        'reception_channel': inp.choice(spec, 'reception_channel', 'Canal de recepción', ('presencial', 'electronico_arce', 'correo_pliego', 'otro'), required=False),
+        'reception_channel': inp.choice(spec, 'reception_channel', 'Canal de recepción', ('portal', 'presencial', 'electronico_arce', 'correo_pliego', 'otro'), required=False),
         'reception_place': inp.text(spec, 'reception_place', 'Lugar de recepción', 2, 200, required=False),
     }
 

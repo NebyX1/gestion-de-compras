@@ -55,6 +55,19 @@ def test_luminarias_min_price_mode_second_wins():
     assert by_id(r, 3)['status'] == 'excluded'
 
 
+@pytest.mark.parametrize('mode', ['weighted', 'min_price'])
+def test_fully_discounted_offer_has_maximum_price_points(mode):
+    inp = base(mode)
+    inp['offers'][0]['discount_total'] = '1830000.00'
+    result = evaluate(inp)
+    assert result['recommended_offer_id'] == 1
+    score = by_id(result, 1)['criteria'][0]
+    assert Decimal(score['points']) == Decimal(score['max'])
+    inp['offers'][0]['discount_total'] = '1830000.01'
+    result = evaluate(inp)
+    assert result['status'] == 'blocked' and by_id(result, 1)['status'] == 'pending'
+
+
 def test_excluded_offer_does_not_set_reference_price():
     r = evaluate(base())
     assert Decimal(r['reference_price']) != Decimal('1500000')

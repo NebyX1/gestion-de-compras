@@ -4,6 +4,8 @@ from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
+APP_NAME = 'Compras Públicas Lavalleja'
+
 
 def flag(name, default='false'):
     return os.getenv(name, default).strip().lower() in ('true', '1', 'yes')

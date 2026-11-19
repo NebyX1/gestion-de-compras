@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Crea el archivo .env privado de Compra Clara con secretos generados localmente.
+  Crea el archivo .env privado de Compras Públicas Lavalleja con secretos generados localmente.
 
 .DESCRIPTION
   - Genera SECRET_KEY y contraseñas de MariaDB aleatorias (solo hexadecimal, sin codificación de URL).

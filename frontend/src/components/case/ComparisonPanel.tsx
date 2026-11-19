@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aiApi, casesApi } from '../../api/endpoints';
-import type { CaseDetail, EvaluationOfferResult, Offer } from '../../api/types';
+import type { AiAdvice, CaseDetail, EvaluationOfferResult, Offer } from '../../api/types';
 import { formatMoney } from '../../lib/format';
 import { useSession } from '../../session';
 import { Badge, Empty, ErrorNotice, Loading, Modal, Notice } from '../ui';
@@ -84,13 +84,21 @@ export function ComparisonPanel({ purchase }: { purchase: CaseDetail }) {
         </div>
         {current && (
           <div className="comparison-verdict-actions">
-            {can('ai.use') && (
-              <button type="button" className="btn" onClick={() => setDetail('ai')}>✦ Explicar con IA</button>
-            )}
+            {can('ai.use') && (current.ai_advice || (winner && ['offers_opened', 'evaluation', 'decision'].includes(purchase.status))) &&
+              <button type="button" className="btn" onClick={() => setDetail('ai')}>{current.ai_advice ? 'Ver recomendación de IA' : 'Solicitar recomendación de IA'}</button>}
             <button type="button" className="btn secondary" onClick={() => setDetail('calculation')}>Ver cálculo</button>
           </div>
         )}
       </section>
+
+      {current?.ai_advice && <section className="card" aria-label="Criterio de la IA">
+        <div className="eyebrow">Recomendación de IA</div>
+        <h2>{current.ai_advice.supplier ?? 'El modelo se abstuvo'}</h2>
+        <p className="ai-explanation">{current.ai_advice.reason}</p>
+        <small>{current.ai_advice.model} · Evaluación {current.version}</small>
+      </section>}
+      {!current?.ai_advice && current?.ai_explanation && <details><summary>Explicación del cálculo generada por IA</summary>
+        <p className="ai-explanation">{current.ai_explanation.content}</p></details>}
 
       <section aria-labelledby="supplier-overview">
         <div className="comparison-section-head"><h2 id="supplier-overview">Ofertas de un vistazo</h2><span>{rows.length} {rows.length === 1 ? 'oferta' : 'ofertas'}</span></div>
@@ -109,6 +117,7 @@ export function ComparisonPanel({ purchase }: { purchase: CaseDetail }) {
                   {winner?.id === row.id ? 'Recomendada' : status?.label ?? (row.offer?.data ? 'Sin evaluar' : 'Sin cotización')}
                 </Badge>
                 <h3>{row.name}</h3>
+                {row.offer?.technical_description && <details><summary>Propuesta técnica</summary><p>{row.offer.technical_description}</p></details>}
                 <div className="comparison-price">{comparablePrice(row, purchase.currency)}</div>
                 <p className="small-text">Importe comparable{row.offer?.data?.freight != null
                   && ` · Flete declarado: ${formatMoney(row.offer.data.freight, row.offer.currency)}`}</p>
@@ -196,30 +205,32 @@ export function ComparisonPanel({ purchase }: { purchase: CaseDetail }) {
         </section>
       )}
 
-      {detail === 'ai' && current && <AiExplanation key={current.id} code={purchase.code} evaluationId={current.id} onClose={() => setDetail(null)} />}
+      {detail === 'ai' && current && <RecommendationDialog key={current.id} code={purchase.code} evaluationId={current.id} initial={current.ai_advice} onClose={() => setDetail(null)} />}
       {detail === 'calculation' && <Calculation code={purchase.code} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-function AiExplanation({ code, evaluationId, onClose }: { code: string; evaluationId: number; onClose: () => void }) {
-  const explanation = useMutation({ mutationFn: () => aiApi.explain(code) });
+function RecommendationDialog({ code, evaluationId, initial, onClose }: { code: string; evaluationId: number; initial?: AiAdvice | null; onClose: () => void }) {
+  const client = useQueryClient();
+  const explanation = useMutation({ mutationFn: () => aiApi.recommend(code), onSuccess: () => client.invalidateQueries({ queryKey: ['case', code] }) });
+  const draft = initial ?? explanation.data;
   return (
-    <Modal title="Explicar con IA" onClose={onClose} footer={
-      explanation.isSuccess ? <button type="button" className="btn" onClick={onClose}>Listo</button> :
+    <Modal title="Recomendación de IA" onClose={onClose} footer={
+      draft ? <button type="button" className="btn" onClick={onClose}>Listo</button> :
         <button type="button" className="btn" disabled={explanation.isPending} onClick={() => explanation.mutate()}>
           {explanation.isPending ? 'Generando…' : 'Confirmar y consultar'}
         </button>
     }>
       <div className="stack">
-        <Notice tone="blue">Si el proveedor usa la nube, procesará un resumen anónimo con el método y el estado del resultado. No se envían nombres, precios, documentos ni texto del expediente.</Notice>
-        {explanation.isPending && <Loading label="Preparando la explicación…" />}
+        {!draft && <Notice tone="blue">Al confirmar, el modelo recibirá los criterios del pliego y los datos de las ofertas admisibles bajo alias. Comparará puntajes, precios relativos, plazos y garantías. Su recomendación inicial quedará registrada para la decisión humana.</Notice>}
+        {explanation.isPending && <Loading label="Comparando las ofertas admisibles…" />}
         {explanation.isError && <><ErrorNotice error={explanation.error} /><p>El cálculo y su recomendación siguen disponibles.</p></>}
-        {explanation.data && (explanation.data.evaluation_id === evaluationId ? (
+        {draft && (draft.evaluation_id === evaluationId ? (
           <>
-            <p className="ai-explanation">{explanation.data.content}</p>
-            {explanation.data.warnings.map((warning) => <Notice key={warning} tone="amber">{warning}</Notice>)}
-            <p className="small-text">Borrador orientativo. Verificá la explicación contra el cuadro; no cambia el cálculo ni adjudica la compra.</p>
+            <h3>{draft.supplier ?? 'El modelo se abstuvo de recomendar una oferta'}</h3>
+            <p className="ai-explanation">{draft.reason}</p>
+            <p className="small-text">{draft.model} · La autoridad competente decide la adjudicación.</p>
           </>
         ) : <Notice tone="amber">La evaluación cambió. Actualizá la compra antes de usar la explicación.</Notice>)}
       </div>

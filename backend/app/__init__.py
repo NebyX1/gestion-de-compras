@@ -35,6 +35,7 @@ def create_app(test_config=None):
     from app.modules.identity import service as _identity_service  # noqa: F401  registra user_loader
     from app.modules.identity.routes import bp as auth_bp
     from app.modules.procurement.routes import bp as procurement_bp
+    from app.modules.portal.routes import bp as portal_bp
     from app.modules.documents.routes import bp as documents_bp
     from app.modules.organization.routes import bp as organization_bp
     from app.modules.rules.routes import bp as rules_bp
@@ -42,7 +43,7 @@ def create_app(test_config=None):
     from app.modules.admin.routes import bp as admin_bp
     from app.modules.integrations.routes import bp as integrations_bp
     from app.ai.routes import bp as ai_bp
-    for bp in (auth_bp, procurement_bp, documents_bp, organization_bp, rules_bp, audit_bp, admin_bp, integrations_bp, ai_bp):
+    for bp in (auth_bp, procurement_bp, portal_bp, documents_bp, organization_bp, rules_bp, audit_bp, admin_bp, integrations_bp, ai_bp):
         app.register_blueprint(bp)
 
     from app.modules.identity.service import protect_csrf, auth_required, csrf_token

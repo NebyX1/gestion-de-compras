@@ -6,5 +6,7 @@ export async function invalidateCase(queryClient: QueryClient, code: string) {
     queryClient.invalidateQueries({ queryKey: ['case-events', code] }),
     queryClient.invalidateQueries({ queryKey: ['cases'] }),
     queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    queryClient.invalidateQueries({ queryKey: ['public-tenders'] }),
+    queryClient.invalidateQueries({ queryKey: ['public-tender', code] }),
   ]);
 }

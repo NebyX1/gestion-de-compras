@@ -12,12 +12,25 @@ import { RulesPage } from './pages/RulesPage';
 import { AuditPage } from './pages/AuditPage';
 import { AdminPage } from './pages/AdminPage';
 import { PreferencesPage } from './pages/PreferencesPage';
+import { SupplierContacts } from './components/SupplierContacts';
+import { Appearance } from './components/Appearance';
+import { PublicLayout } from './components/PublicLayout';
+import { PublicHomePage, PublicTenderPage, PublicOfferPage, PublicResultsPage } from './portal';
 
 export function App() {
   return (
-    <ToastProvider>
-      <AppRoutes />
-    </ToastProvider>
+    <Appearance><ToastProvider>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route index element={<PublicHomePage />} />
+          <Route path="licitaciones" element={<Navigate to="/#licitaciones" replace />} />
+          <Route path="licitaciones/:id" element={<PublicTenderPage />} />
+          <Route path="licitaciones/:id/ofertar" element={<PublicOfferPage />} />
+          <Route path="resultados" element={<PublicResultsPage />} />
+        </Route>
+        <Route path="*" element={<AppRoutes />} />
+      </Routes>
+    </ToastProvider></Appearance>
   );
 }
 
@@ -52,16 +65,17 @@ function AuthenticatedRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<RequirePermission permission="dashboard.read"><DashboardPage /></RequirePermission>} />
+        <Route path="gestion" element={<RequirePermission permission="dashboard.read"><DashboardPage /></RequirePermission>} />
         <Route path="compras" element={<RequirePermission permission="case.read"><CasesPage /></RequirePermission>} />
         <Route path="compras/:code" element={<RequirePermission permission="case.read"><CaseDetailPage /></RequirePermission>} />
+        <Route path="proveedores" element={<RequirePermission permission="supplier.manage"><SupplierContacts /></RequirePermission>} />
         <Route path="evaluar" element={<RequirePermission permission="offer.read"><EvaluatePage /></RequirePermission>} />
         <Route path="evaluar/:code" element={<RequirePermission permission="offer.read"><ComparisonPage /></RequirePermission>} />
         <Route path="reglas" element={<RulesPage />} />
         <Route path="auditoria" element={<RequirePermission permission="audit.read"><AuditPage /></RequirePermission>} />
         <Route path="administracion" element={<RequirePermission anyOf={['admin.users', 'admin.areas', 'admin.rules']}><AdminPage /></RequirePermission>} />
         <Route path="preferencias" element={<PreferencesPage />} />
-        <Route path="login" element={<Navigate to="/" replace />} />
+        <Route path="login" element={<Navigate to="/gestion" replace />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
@@ -72,7 +86,7 @@ function NotFound() {
   return (
     <div className="empty">
       <strong>No encontramos esta página.</strong>
-      <div><a href="/">Volver al escritorio</a></div>
+      <div><a href="/gestion">Volver al escritorio</a></div>
     </div>
   );
 }

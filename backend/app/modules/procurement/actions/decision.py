@@ -1,6 +1,7 @@
 """Etapas 4 y 5 (Evaluación y Decisión): evaluación versionada, dictamen, control preventivo, adjudicación."""
 from datetime import date
 from decimal import Decimal
+from app.ai import recommendation
 from app.extensions import db
 from app.infrastructure.models import (Opinion, Intervention, ObservationResponse, Award, AwardLine, Offer, SupplierStatus, OfferDataVersion, Availability)
 from app.modules.evaluation import service as evals
@@ -193,9 +194,17 @@ def _award_blockers(ctx):
 def _award_form(ctx):
     ev = current_ev(ctx)
     opts = [{'value': o['id'], 'label': f"{o['name']} · {o['totals']['commercial']} {o['totals']['currency']}"} for o in (ev.result['offers'] if ev else []) if o['status'] == 'admissible']
-    return [F.field('offer_id', 'Oferta que se adjudica', 'select', options=opts, default=ev.recommended_offer_id if ev else None),
-            *F.ref_reason('Fundamento de la adjudicación', 'Número de resolución / acto'),
-            F.field('departure_reason', 'Motivo de apartamiento (si elegís una oferta distinta de la recomendada)', 'textarea', required=False, rows=3),
+    advice = recommendation.serialize(recommendation.initial(ev), ev) if ev else None
+    help_text = None
+    if advice:
+        choice = advice['supplier'] or 'Abstención'
+        help_text = f"Recomendación inicial de IA ({advice['model']}): {choice}. {advice['reason']}"
+    return [F.field('offer_id', 'Oferta que se adjudica', 'select', options=opts, default=ev.recommended_offer_id if ev else None,
+                    help=help_text),
+            F.field('reference', 'Número de resolución / acto'),
+            F.field('reason', 'Fundamento de la autoridad', 'textarea', rows=3,
+                    help='Explicá qué condiciones del pliego y de la oferta respaldan la decisión. Este fundamento podrá publicarse en el portal.'),
+            F.field('departure_reason', 'Motivo de apartamiento del cálculo, de la recomendación de IA o del dictamen', 'textarea', required=False, rows=3),
             F.field('rupe_exception_reason', 'Excepción reglada a RUPE activo (si corresponde)', 'textarea', required=False, rows=2),
             F.field('vista_reference', 'Constancia de vista previa (art. 67, si corresponde)', required=False),
             F.field('verified', 'Verifiqué RUPE, impedimentos, garantías y demás requisitos aplicables', 'checkbox')]
@@ -239,7 +248,10 @@ def award_register(ctx, data):
                                                            Intervention.result == 'sin_observacion', Intervention.evaluation_id == ev.id, Intervention.offer_id == offer_id)
                              .order_by(Intervention.id.desc()))
     require(ctrl is not None, 'control_missing', 'Falta un control preventivo sin observación sobre ESTA oferta. Si te apartás de la recomendación, el control debe revisar la oferta elegida.', 409)
-    departure = inp.text(data, 'departure_reason', 'Motivo de apartamiento', 30, 4000, required=offer_id != ev.recommended_offer_id)
+    advice = recommendation.initial(ev, lock=True)
+    ai_choice = advice.sources[0]['offer_id'] if advice else None
+    departure = inp.text(data, 'departure_reason', 'Motivo de apartamiento', 30, 4000,
+                         required=offer_id != ev.recommended_offer_id or (ai_choice is not None and offer_id != ai_choice))
     opinion = db.session.scalar(db.select(Opinion).where(Opinion.case_id == ctx.case.id, Opinion.status == 'active', Opinion.evaluation_id == ev.id).order_by(Opinion.id.desc()))
     if opinion and opinion.recommended_offer_id != offer_id and not departure:
         raise ApiError('validation', 'Te apartás del dictamen: fundá expresamente el apartamiento.', 422, {'departure_reason': 'Obligatorio.'})
@@ -257,6 +269,9 @@ def award_register(ctx, data):
                   awarded_by=ctx.user.id)
     db.session.add(award)
     db.session.flush()
+    initial_draft = advice or evals.initial_ai_explanation(ev)
+    if initial_draft:
+        ctx.case.flags = {**(ctx.case.flags or {}), 'award_ai_draft_id': initial_draft.id}
     by_line = {l['line_id']: l for l in row['totals']['lines']}
     for line in ctx.lines:
         t = by_line[line.id]
@@ -265,4 +280,4 @@ def award_register(ctx, data):
     db.session.flush()
     return {'status': 'awarded', 'type': 'award', 'id': award.id, 'reference': award.reference, 'reason': award.grounds,
             'details': {'offer_id': offer.id, 'amount': dstr(amount), 'evaluation_version': ev.version, 'opinion_id': opinion.id if opinion else None,
-                        'control_id': ctrl.id, 'departure': bool(departure)}}
+                        'control_id': ctrl.id, 'departure': bool(departure), 'ai_draft_id': initial_draft.id if initial_draft else None}}

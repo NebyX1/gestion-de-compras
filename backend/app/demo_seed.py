@@ -10,14 +10,14 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.infrastructure import audit
-from app.infrastructure.models import (Area, Evaluation, Offer, ProcurementCase, RequestLine, RequirementReview,
+from app.infrastructure.models import (Area, Envelope, Evaluation, Offer, PortalSubmission, ProcurementCase, RequestLine, RequirementReview,
                                        SpecRequirement, SpecVersion, Supplier, SupplierStatus, User, UserRole)
 from app.modules.identity.permissions import ROLE_NAMES
 from app.modules.identity.service import validate_password
 from app.modules.procurement import framework
 from app.modules.procurement.service import create_case, spec_hash
 from app.bootstrap import ensure_base_config
-from app.shared.contracts import utcnow
+from app.shared.contracts import canonical_hash, utcnow
 from app.shared.errors import ApiError
 
 PASSWORD_ALPHABET = string.ascii_letters + string.digits + '!@#$%^&*-_'
@@ -156,6 +156,36 @@ CASES += [
     ]),
 ]
 
+
+def _public_call(num, title, area, quantity, unit, budget, procedure, minimum, need, days, weighted=False):
+    return {'html_id': f'PORTAL-DEMO-{num}', 'num': str(num), 'title': title, 'area': area, 'quantity': quantity,
+            'unit': unit, 'budget': budget, 'procedure': procedure, 'minimum': minimum, 'need': need,
+            'mode': 'weighted' if weighted else 'min_price', 'min_warranty': 24, 'max_days': 30, 'deadline_days': days,
+            'credit_ref': f'PRE-PORTAL-DEMO-{num}', 'stage': 4, 'offers': [], 'portal': True,
+            'omitted': 'Convocatoria ficticia publicada en el portal departamental.'}
+
+
+CASES += [
+    _public_call(54, 'Luminarias LED para espacios públicos', 'Alumbrado público', 120, 'luminarias', 2200000,
+                 'licitacion_abreviada', IP66_MINIMUM,
+                 'Renovar los puntos de luz en plazas y avenidas de Minas para mejorar la visibilidad nocturna.', 18, True),
+    _public_call(55, 'Gravilla para caminos rurales', 'Vialidad', 600, 'toneladas', 1300000,
+                 'concurso_precios', 'Gravilla de entre 6 y 12 mm, con ficha de granulometría y transporte incluido.',
+                 'Abastecer a las cuadrillas que reparan el firme de los caminos vecinales del departamento.', 24),
+    _public_call(56, 'Equipos informáticos para atención ciudadana', 'Administración', 20, 'equipos', 950000,
+                 'compra_directa', 'Cada equipo incluye monitor, teclado, 16 GB de memoria RAM y disco SSD de 512 GB.',
+                 'Sustituir los equipos de las oficinas de atención al público y de las mesas de entrada.', 12, True),
+    {**_public_call(57, 'Señalización para cruces escolares', 'Vialidad', 60, 'señales', 450000,
+                    'compra_directa', 'Señales de chapa galvanizada y lámina retrorreflectiva clase II.',
+                    'Instalar señales verticales en los cruces próximos a centros educativos de Minas.', 21, True),
+     'offer_comparison': [
+         {'supplier': 'Señal Vial Serrana · demo', 'unit_price': '4900', 'freight': '0',
+          'delivery_days': 10, 'warranty_months': 60, 'technical': 'met'},
+         {'supplier': 'Camino Seguro · demo', 'unit_price': '4600', 'freight': '0',
+          'delivery_days': 15, 'warranty_months': 36, 'technical': 'met'}],
+     'award_supplier': 'Camino Seguro · demo', 'omitted': 'Adjudicación ficticia publicada. La semilla no consulta un modelo de IA.'},
+]
+
 GENERAL_OMISSIONS = [
     'Documentos adjuntos del modelo (solicitud, pliego, actas): requieren almacenamiento de archivos.',
     'Los ejemplos del área Pruebas locales incluyen apertura y evaluación ficticias, sin adjudicación.',
@@ -223,6 +253,8 @@ def _ensure_suppliers(compras):
 def _spec(c, deadline=None):
     spec = {'mode': c['mode'], 'currency': 'UYU', 'minimum_text': c['minimum'], 'reception_channel': 'presencial', 'reception_place': 'Mesa de entradas',
             'requirements': [{'code': 'R1', 'text': c['minimum'], 'essential': True, 'kind': 'review'}]}
+    if c.get('portal'):
+        spec.update(reception_channel='portal', reception_place='Portal de compras de Lavalleja')
     if c['mode'] == 'weighted':
         spec['requirements'] += [
             {'code': 'R2', 'text': f"Garantía mínima de {c['min_warranty']} meses", 'essential': True, 'kind': 'numeric',
@@ -242,7 +274,7 @@ def _spec(c, deadline=None):
 
 def _steps(c, suppliers, line_id, now):
     convenio = c['procedure'] == 'convenio_marco'
-    deadline = (now + timedelta(days=20)).isoformat()
+    deadline = (now + timedelta(days=c.get('deadline_days', 20))).isoformat()
     published = (now - timedelta(days=30)).date().isoformat()
     steps = []
     if c['stage'] >= 2:
@@ -251,7 +283,7 @@ def _steps(c, suppliers, line_id, now):
         steps += [
             ('compras', 'procedure.classify', {'procedure_type': c['procedure'], 'reason': 'Encuadre según monto y tipo de compra (datos de demostración).'}),
             ('contaduria', 'availability.register', {
-                'fiscal_year': 2026, 'item': c['title'], 'funding_source': 'Rentas generales', 'total_amount': str(c['budget']),
+                'fiscal_year': 2026, 'item': c['credit_ref'] if c.get('portal') else c['title'], 'funding_source': 'Rentas generales', 'total_amount': str(c['budget']),
                 'credit_support_ref': c['credit_ref'], 'amount': str(c['budget']), 'availability_date': '2026-10-01', 'support_ref': f"DISP-DEMO-{c['num']}"})]
     if c['stage'] >= 4:
         if not convenio:
@@ -259,7 +291,9 @@ def _steps(c, suppliers, line_id, now):
         steps += [
             ('compras', 'spec.approve', {}),
             ('ordenador', 'call.authorize', {'reference': f"RES-DEMO-{c['num']}", 'reason': 'Llamado autorizado con datos ficticios de demostración.'})]
-        if not convenio:
+        if c.get('portal'):
+            steps.append(('compras', 'publicity.register', {'kind': 'convocatoria', 'state': 'portal'}))
+        elif not convenio:
             steps.append(('compras', 'publicity.register', {'kind': 'convocatoria', 'state': 'external_constancia',
                                                             'reference': f"ARCE-DEMO-{c['num']}", 'published_on': published}))
             for name, _net in c['offers']:
@@ -281,6 +315,8 @@ def _ensure_demo_comparison(case, users, suppliers, line_id, quotes):
         raise RuntimeError(f'El expediente demo {case.code} no tiene un pliego aprobado.')
 
     if case.status == 'receiving_offers':
+        if spec.reception_channel == 'portal':
+            _demo_submissions(case, spec, suppliers, line_id, quotes)
         if spec.offer_deadline and spec.offer_deadline > utcnow():
             previous = spec.offer_deadline
             spec.offer_deadline = utcnow() - timedelta(seconds=1)
@@ -335,16 +371,59 @@ def _ensure_demo_comparison(case, users, suppliers, line_id, quotes):
         framework.execute(case.code, 'evaluation.run', {}, users['tecnica'])
 
 
+def _demo_submissions(case, spec, suppliers, line_id, quotes):
+    """Sobres de ejemplo, sin usar direcciones reales ni atribuirles una verificación de identidad."""
+    for quote in quotes:
+        supplier = suppliers[quote['supplier']]
+        if db.session.scalar(db.select(Envelope.id).where(Envelope.case_id == case.id, Envelope.supplier_id == supplier.id)):
+            continue
+        env = Envelope(case_id=case.id, spec_version_id=spec.id, supplier_id=supplier.id, receipt_code=f'DEMO-{case.code}-{supplier.code}',
+                       channel='portal', deadline_at=spec.offer_deadline, on_time=True, custody_note='Sobre ficticio de la semilla de demostración.')
+        db.session.add(env)
+        db.session.flush()
+        offer = {'currency': case.currency, 'prices_include_tax': False, 'lines': [{'request_line_id': line_id, 'unit_price': quote['unit_price'], 'tax_rate': '22'}],
+                 'delivery_days': quote['delivery_days'], 'warranty_months': quote['warranty_months'], 'freight': quote['freight'], 'freight_includes_tax': True}
+        original = {'supplier_name': supplier.name, 'tax_id': supplier.tax_id, 'email': None, 'accepted_terms': True, 'spec_hash': spec.content_hash,
+                    'technical_description': 'Ficha de demostración de señales galvanizadas con lámina clase II.', 'offer': offer}
+        db.session.add(PortalSubmission(envelope_id=env.id, retry_key=canonical_hash(env.receipt_code), payload_hash=canonical_hash(original), original=original))
+        audit.record(None, 'demo.portal_submission', 'envelope', env.id, case=case, reference=env.receipt_code, reason=env.custody_note)
+    db.session.commit()
+
+
+def _publish_demo_award(case, users, supplier):
+    """Continúa desde el último paso confirmado si la semilla ya creó parte del resultado."""
+    if case.status == 'evaluation':
+        framework.execute(case.code, 'evaluation.send', {'reference': 'ENV-DEMO-57', 'reason': 'Comparación de las dos propuestas ficticias.'}, users['tecnica'])
+    if case.status == 'decision':
+        from app.infrastructure.models import Intervention
+        offer = db.session.scalar(db.select(Offer).where(Offer.case_id == case.id, Offer.supplier_id == supplier.id))
+        if not db.session.scalar(db.select(Intervention.id).where(Intervention.case_id == case.id, Intervention.offer_id == offer.id,
+                                                                  Intervention.kind == 'control_gasto', Intervention.status == 'active')):
+            framework.execute(case.code, 'control.register', {'offer_id': offer.id, 'result': 'sin_observacion', 'reference': 'CTRL-DEMO-57',
+                                                              'reason': 'Control ficticio del monto y de la disponibilidad para la oferta seleccionada.'}, users['control'])
+        framework.execute(case.code, 'award.register', {
+            'offer_id': offer.id, 'reference': 'RES-DEMO-57', 'verified': True,
+            'reason': 'La oferta incluye las 60 señales con la lámina requerida, las entrega antes de la instalación y reduce el gasto total.',
+            'departure_reason': 'La otra propuesta obtuvo más puntos por entrega y garantía. La autoridad consideró suficiente la garantía de 36 meses y el plazo de 15 días e hizo constar el ahorro.'},
+            users['ordenador'])
+    if case.status == 'awarded' and not (case.flags or {}).get('public_award'):
+        framework.execute(case.code, 'award.publish', {'confirmed': True}, users['compras'])
+
+
 def _ensure_cases(users, areas, suppliers):
     reports = []
     now = datetime.now(timezone.utc)
     for c in CASES:
         need_text = f"Expediente de demostración {c['html_id']} (datos ficticios): {c['title']}."
+        if c.get('portal'):
+            need_text = f"{c['need']} Ejemplo ficticio {c['html_id']}."
         existing = db.session.scalar(db.select(ProcurementCase).filter_by(is_demo=True, need_text=need_text))
         if existing is not None:
             line_id = db.session.scalar(db.select(RequestLine.id).where(RequestLine.case_id == existing.id))
             if c.get('offer_comparison'):
                 _ensure_demo_comparison(existing, users, suppliers, line_id, c['offer_comparison'])
+                if c.get('award_supplier'):
+                    _publish_demo_award(existing, users, suppliers[c['award_supplier']])
             reports.append({'html_id': c['html_id'], 'code': existing.code, 'title': c['title'], 'status': 'ya existía', 'omitted': c['omitted']})
             continue
         try:
@@ -373,6 +452,8 @@ def _ensure_cases(users, areas, suppliers):
             try:
                 _ensure_demo_comparison(case, users, suppliers, line_id, c['offer_comparison'])
                 done += len(c['offer_comparison']) * 2 + 2
+                if c.get('award_supplier'):
+                    _publish_demo_award(case, users, suppliers[c['award_supplier']])
             except ApiError as exc:
                 db.session.rollback()
                 failure = f'evaluation.run: {exc.code}'

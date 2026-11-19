@@ -11,7 +11,24 @@ from app.shared.errors import require
 CLASSIFIABLE = ('compra_directa', 'concurso_precios', 'licitacion_abreviada', 'licitacion_publica', 'convenio_marco')
 
 
-@action('request.edit', 'Editar solicitud', 'case.edit_draft', {'draft'}, description='Editá la necesidad, los renglones y los requisitos antes de enviarla.')
+def _edit_form(ctx):
+    from app.modules.procurement.serializers import spec_json
+    case = ctx.case
+    line_fields = [F.field('description', 'Descripción'), F.field('quantity', 'Cantidad', 'number'),
+                   F.field('unit', 'Unidad'), F.field('estimated_unit_price', 'Precio estimado por unidad', 'money', required=False),
+                   F.field('tax_rate', 'IVA (%)', 'number', required=False)]
+    lines = [{field['name']: getattr(row, field['name']) for field in line_fields} for row in ctx.lines]
+    return [F.field('title', 'Nombre de la compra', default=case.title),
+            F.field('need_text', 'Necesidad de la Intendencia', 'textarea', default=case.need_text),
+            F.field('currency', 'Moneda de la compra', default=case.currency),
+            F.field('estimated_total', 'Monto estimado', 'money', default=dstr(case.estimated_total)),
+            F.field('delivery_place', 'Lugar de entrega', default=case.delivery_place, required=False),
+            F.field('lines', 'Productos o servicios', 'lines', fields=line_fields, default=lines),
+            F.field('spec', 'Pliego', 'spec', default=spec_json(ctx.spec))]
+
+
+@action('request.edit', 'Editar solicitud', 'case.edit_draft', {'draft'}, form=_edit_form,
+        description='Editá la necesidad, los renglones y los requisitos antes de enviarla.')
 def request_edit(ctx, data):
     case = ctx.case
     require(ctx.user.id == case.requester_id or ctx.assignment('case.receive'), 'forbidden', 'Solo quien creó la solicitud o Compras pueden editarla.', 403)

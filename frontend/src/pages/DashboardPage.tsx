@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { casesApi } from '../api/endpoints';
 import { Badge, Empty, ErrorNotice, Loading, Stat } from '../components/ui';
 import { formatDateTime, formatMoney } from '../lib/format';
+import { APP_NAME } from '../lib/branding';
 import { toneClass } from '../lib/labels';
 import { useSession } from '../session';
 
@@ -20,7 +21,7 @@ export function DashboardPage() {
     <>
       <header className="comparison-intro">
         <div>
-          <div className="eyebrow">Compra Clara · Lavalleja</div>
+          <div className="eyebrow">{APP_NAME}</div>
           <h1>Compras más fáciles de entender</h1>
           <p>Hola, {first}. Encontrá tus compras y revisá sus ofertas en un solo lugar.</p>
         </div>

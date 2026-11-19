@@ -2,7 +2,7 @@
 from decimal import Decimal
 from app.extensions import db
 from app.infrastructure.models import (Envelope, Offer, OfferDataVersion, OfferLine, DeadlineExtension, OpeningRecord, RequirementReview, ManualScore,
-                                       Subsanation, Document, DocumentVersion, Supplier)
+                                       Subsanation, Document, DocumentVersion, Supplier, PortalSubmission)
 from app.infrastructure import tasks
 from app.modules.evaluation.service import mark_dependents_stale, latest_reviews
 from app.modules.procurement import forms as F, inputs as inp
@@ -25,6 +25,8 @@ def _envelope_form(ctx):
 
 
 def _receiving_blockers(ctx):
+    if ctx.spec and ctx.spec.reception_channel == 'portal':
+        return ['Los proveedores presentan sus sobres directamente en el portal público.']
     d = effective_deadline(ctx.case, ctx.spec)
     return [] if d else ['El pliego no tiene plazo de recepción.']
 
@@ -99,7 +101,13 @@ def opening_perform(ctx, data):
     queued = 0
     for env in envs:
         env.opened_at = now
-        db.session.add(Offer(case_id=ctx.case.id, envelope_id=env.id, supplier_id=env.supplier_id, currency=ctx.case.currency))
+        offer = Offer(case_id=ctx.case.id, envelope_id=env.id, supplier_id=env.supplier_id, currency=ctx.case.currency)
+        db.session.add(offer)
+        if env.channel == 'portal':
+            submission = db.session.get(PortalSubmission, env.id)
+            require(submission is not None, 'missing_original', 'Falta el formulario original del sobre digital.', 409)
+            db.session.flush()
+            write_offer_data(ctx, offer, submission.original['offer'], f'Formulario original del proveedor, sobre {env.receipt_code}.')
         rows = db.session.execute(db.select(DocumentVersion, Document).join(Document, Document.id == DocumentVersion.document_id)
                                   .where(Document.envelope_id == env.id, Document.status == 'active')).all()
         for ver, doc in rows:

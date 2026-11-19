@@ -161,6 +161,7 @@ class PublicityRecord(db.Model):
     reference = db.Column(db.String(200))
     published_at = ts_null()
     document_id = fk('document.id', nullable=True)
+    portal_version_id = fk('document_version.id', nullable=True)
     notice_note = db.Column(db.String(500))
     created_by = fk('user.id')
     created_at = ts()
@@ -181,9 +182,19 @@ class Envelope(db.Model):
     custody_note = db.Column(db.String(300), nullable=False)
     status = db.Column(db.String(12), nullable=False, default='received')  # received | late | withdrawn
     opened_at = ts_null()
-    created_by = fk('user.id')
+    created_by = fk('user.id', nullable=True)  # NULL cuando presenta directamente el proveedor por el portal.
     supplier = db.relationship('Supplier')
     __table_args__ = (db.UniqueConstraint('case_id', 'supplier_id', 'round', name='uq_envelope_supplier'),)
+
+
+class PortalSubmission(db.Model):
+    """Original del formulario en custodia. Solo la apertura importa sus datos al comparador."""
+    __tablename__ = 'portal_submission'
+    envelope_id = db.Column(db.Integer, db.ForeignKey('envelope.id'), primary_key=True)
+    retry_key = db.Column(db.String(64), nullable=False, unique=True)
+    payload_hash = db.Column(db.String(64), nullable=False)
+    original = db.Column(db.JSON, nullable=False)
+    envelope = db.relationship('Envelope')
 
 
 class DeadlineExtension(db.Model):

@@ -4,6 +4,8 @@ import { authApi } from '../api/endpoints';
 import { setCsrfToken } from '../api/client';
 import { SESSION_KEY } from '../session';
 import { ErrorNotice, Notice } from '../components/ui';
+import { PortalBrand } from '../components/PublicLayout';
+import { ThemeToggle } from '../components/Appearance';
 
 export function LoginPage() {
   const queryClient = useQueryClient();
@@ -65,13 +67,7 @@ export function LoginPage() {
   return (
     <div className="login-wrap">
       <div className="card login-card">
-        <div className="row" style={{ marginBottom: 18 }}>
-          <span className="brand-mark" aria-hidden="true">✓</span>
-          <div>
-            <strong>compra clara<span style={{ color: 'var(--primary)' }}>.</span></strong>
-            <div className="field-help">Lavalleja · acceso al sistema</div>
-          </div>
-        </div>
+        <div className="login-brand"><PortalBrand /><ThemeToggle /></div>
 
         {challenge.isPending && <Notice>Preparando el ingreso…</Notice>}
         {challenge.isError && <ErrorNotice error={challenge.error} />}

@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useSession } from '../session';
-import { usePreferences } from '../store/preferences';
+import { ThemeToggle } from './Appearance';
+import { PortalBrand } from './PublicLayout';
 import { ROLE_LABELS } from '../lib/labels';
+import { APP_NAME } from '../lib/branding';
 
 interface NavItem {
   to: string;
@@ -13,6 +15,7 @@ interface NavItem {
 
 const ROUTE_TITLES: [string, string][] = [
   ['/compras', 'Compras'],
+  ['/proveedores', 'Proveedores'],
   ['/evaluar', 'Comparar ofertas'],
   ['/reglas', 'Normativa y flujo'],
   ['/auditoria', 'Auditoría'],
@@ -21,14 +24,14 @@ const ROUTE_TITLES: [string, string][] = [
 ];
 
 function crumbFor(pathname: string): string {
-  if (pathname === '/') return 'Mi escritorio';
+  if (pathname === '/gestion') return 'Mi escritorio';
   const match = ROUTE_TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  return match ? match[1] : 'Compra Clara';
+  return match?.[1] ?? 'Escritorio';
 }
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'CC';
+  if (parts.length === 0) return 'CP';
   return parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join('');
 }
 
@@ -36,24 +39,16 @@ export function Layout() {
   const { user, can, logout } = useSession();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const bigText = usePreferences((s) => s.bigText);
-  const highContrast = usePreferences((s) => s.highContrast);
-  const reduceMotion = usePreferences((s) => s.reduceMotion);
-
-  useEffect(() => {
-    document.body.classList.toggle('big-text', bigText);
-    document.body.classList.toggle('high-contrast', highContrast);
-    document.body.classList.toggle('no-motion', reduceMotion);
-  }, [bigText, highContrast, reduceMotion]);
 
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
   const items: NavItem[] = [
-    { to: '/', label: 'Inicio', end: true, visible: can('dashboard.read') },
+    { to: '/gestion', label: 'Mi escritorio', end: true, visible: can('dashboard.read') },
     { to: '/evaluar', label: 'Comparar ofertas', visible: can('offer.read') },
     { to: '/compras', label: 'Compras', visible: can('case.read') },
+    { to: '/proveedores', label: 'Proveedores', visible: can('supplier.manage') },
   ];
   const control: NavItem[] = [
     { to: '/auditoria', label: 'Auditoría', visible: can('audit.read') },
@@ -74,13 +69,7 @@ export function Layout() {
   return (
     <>
       <aside className={`sidebar ${drawerOpen ? 'open' : ''}`} id="sidebar" aria-label="Navegación principal">
-        <Link to="/" className="brand">
-          <span className="brand-mark" aria-hidden="true">✓</span>
-          <span>
-            <strong>compra clara<span style={{ color: 'var(--primary)' }}>.</span></strong>
-            <span>Lavalleja</span>
-          </span>
-        </Link>
+        <PortalBrand />
         <nav>
           <div className="nav">{renderNav(items)}</div>
           <details className="nav-tools" open={control.some((item) => item.visible && location.pathname === item.to)}>
@@ -89,7 +78,8 @@ export function Layout() {
           </details>
         </nav>
         <div className="sidebar-foot">
-          Sesión de {ROLE_LABELS[user.roles[0] ?? ''] ?? 'usuario'} · {user.area ?? 'Sin área asignada'}
+          <Link to="/">Volver al portal público</Link>
+          <p>Sesión de {ROLE_LABELS[user.roles[0] ?? ''] ?? 'usuario'} · {user.area ?? 'Sin área asignada'}</p>
         </div>
       </aside>
       <div className={`drawer-backdrop ${drawerOpen ? 'open' : ''}`} onClick={() => setDrawerOpen(false)} aria-hidden="true" />
@@ -106,9 +96,10 @@ export function Layout() {
             >
               ☰
             </button>
-            <div className="crumb">Compras públicas › <strong>{crumbFor(location.pathname)}</strong></div>
+            <div className="crumb">{APP_NAME} › <strong>{crumbFor(location.pathname)}</strong></div>
           </div>
           <div className="user-chip">
+            <ThemeToggle />
             <span className="avatar" aria-hidden="true">{initials(user.full_name)}</span>
             <span className="name">{user.full_name}</span>
             {!user.is_local_test_user && (
@@ -122,7 +113,7 @@ export function Layout() {
           <Outlet />
         </main>
         <footer className="footer">
-          <span>Compra Clara · Sistema de compras públicas para Lavalleja</span>
+          <span>{APP_NAME}</span>
         </footer>
       </div>
     </>

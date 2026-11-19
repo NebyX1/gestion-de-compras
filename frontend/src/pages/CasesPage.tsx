@@ -145,6 +145,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
   const [idempotencyKey] = useState(() => uuid());
   const [title, setTitle] = useState('');
   const [needText, setNeedText] = useState('');
+  const [minimum, setMinimum] = useState('');
   const [areaId, setAreaId] = useState(user.area_id ? String(user.area_id) : '');
   const [estimatedTotal, setEstimatedTotal] = useState('');
   const [deliveryPlace, setDeliveryPlace] = useState('');
@@ -177,6 +178,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
     const t = title.trim();
     if (t.length < 5 || t.length > 200) next.title = 'Entre 5 y 200 caracteres.';
     if (needText.trim().length < 10) next.need_text = 'Describí la necesidad con al menos 10 caracteres.';
+    if (minimum.trim().length < 12) next.minimum_text = 'Describí el requisito con al menos 12 caracteres.';
     if (!areaId) next.area_id = 'Elegí un área.';
     const total = Number(normalizeDecimal(estimatedTotal));
     if (!normalizeDecimal(estimatedTotal) || !Number.isFinite(total) || total <= 0) {
@@ -206,6 +208,10 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
       estimated_total: normalizeDecimal(estimatedTotal),
       delivery_place: deliveryPlace.trim() || undefined,
       currency: 'UYU',
+      spec: {
+        minimum_text: minimum.trim(), reception_channel: 'portal', mode: 'min_price',
+        requirements: [{ code: 'R1', kind: 'review', essential: true, text: minimum.trim() }],
+      },
       lines: lines.map((line) => ({
         description: line.description.trim(),
         quantity: normalizeDecimal(line.quantity),
@@ -266,6 +272,12 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
             <input id="nc-total" inputMode="decimal" placeholder="0,00" value={estimatedTotal} onChange={(e) => setEstimatedTotal(e.target.value)} aria-invalid={fieldError('estimated_total') ? 'true' : undefined} />
             <div className="form-error">{fieldError('estimated_total')}</div>
           </div>
+        </div>
+        <div className="field">
+          <label htmlFor="nc-minimum">Requisito mínimo del bien o servicio <span className="req">*</span></label>
+          <textarea id="nc-minimum" value={minimum} maxLength={500} onChange={(e) => setMinimum(e.target.value)} aria-describedby="nc-minimum-help" />
+          <div id="nc-minimum-help" className="field-help">Se incorpora al pliego. Durante la preparación podés agregar requisitos, fijar el cierre y elegir cómo comparar las ofertas.</div>
+          <div className="form-error">{fieldError('minimum_text')}</div>
         </div>
         <div className="field">
           <label htmlFor="nc-place">Lugar de entrega</label>

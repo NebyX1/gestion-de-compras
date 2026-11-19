@@ -13,7 +13,7 @@ from app.modules.documents.policies import readable_document_ids
 MAX_MSG = 2000
 MAX_HISTORY = 6
 
-SYSTEM = """Sos el asistente de consulta de Compra Clara (compras públicas de la Intendencia de Lavalleja, Uruguay).
+SYSTEM = """Sos el asistente de consulta de Compras Públicas Lavalleja, el portal de la Intendencia de Lavalleja, Uruguay.
 Respondé SOLO con la información del contexto: "HECHOS DEL EXPEDIENTE" (verificados por el sistema) y "FRAGMENTOS" recuperados.
 Cada afirmación que se apoye en un fragmento debe citarlo con su identificador entre corchetes, por ejemplo [F2]. Si el contexto no alcanza, decilo con claridad:
 no inventes importes, plazos, artículos, normas ni datos. No cites artículos que no figuren en los fragmentos.

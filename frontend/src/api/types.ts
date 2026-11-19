@@ -24,6 +24,8 @@ export interface FormOption {
 }
 
 export interface FormField {
+  itemLabel?: string;
+  when?: { key: string; value: string };
   name: string;
   label: string;
   type: string;
@@ -198,6 +200,7 @@ export interface ManualScore {
 }
 
 export interface Offer {
+  technical_description?: string | null;
   id: number;
   supplier_id: number;
   supplier: string;
@@ -232,7 +235,18 @@ export interface EvaluationResult {
   [key: string]: unknown;
 }
 
+export interface AiAdvice {
+  offer_id: number | null;
+  supplier: string | null;
+  reason: string;
+  model: string;
+  evaluation_id: number;
+  abstained: boolean;
+}
+
 export interface Evaluation {
+  ai_advice?: AiAdvice | null;
+  ai_explanation?: AiDraft | null;
   id: number;
   version: number;
   status: string;
@@ -271,6 +285,7 @@ export interface EventJson {
 }
 
 export interface CaseDetail extends CaseSummary {
+  publicity?: { kind: string; state: string; published_at: string | null }[];
   need_text: string;
   delivery_place: string | null;
   requester: string | null;
@@ -352,6 +367,7 @@ export interface Supplier {
   contact_email: string | null;
   active: boolean;
   is_demo: boolean;
+  statuses?: { id: number; kind: string; state: string; valid_from: string | null; valid_to: string | null; evidence_ref: string }[];
 }
 
 export interface SupplierStatusInput {

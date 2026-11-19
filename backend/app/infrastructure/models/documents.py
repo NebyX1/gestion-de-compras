@@ -15,7 +15,7 @@ class Document(db.Model):
     envelope_id = fk('envelope.id', nullable=True)
     status = db.Column(db.String(12), nullable=False, default='active')
     external_reference = db.Column(db.String(300))  # referencia externa verificable, distinta de un archivo
-    created_by = fk('user.id')
+    created_by = fk('user.id', nullable=True)
     created_at = ts()
     versions = db.relationship('DocumentVersion', backref='document', order_by='DocumentVersion.version', lazy='select')
 
@@ -33,7 +33,7 @@ class DocumentVersion(db.Model):
     text_status = db.Column(db.String(20), nullable=False, default='pending')
     # pending | extracted | no_text | failed | held_sealed
     page_count = db.Column(db.Integer)
-    uploaded_by = fk('user.id')
+    uploaded_by = fk('user.id', nullable=True)
     uploaded_at = ts()
     __table_args__ = (db.UniqueConstraint('document_id', 'version', name='uq_document_version'),)
 

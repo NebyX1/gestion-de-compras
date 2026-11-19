@@ -93,9 +93,8 @@ function ActionModal({ code, version, action, documents, onClose }: ActionModalP
       const apiErr = toApiError(err);
       if (apiErr.fields && Object.keys(apiErr.fields).length > 0) {
         setErrors(apiErr.fields);
-      } else {
-        setFormError(err);
       }
+      setFormError(err);
     },
   });
 

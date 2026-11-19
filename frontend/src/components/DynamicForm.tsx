@@ -1,6 +1,7 @@
 import { useId, type FormEvent, type ReactNode } from 'react';
 import type { CaseDocument, FormField } from '../api/types';
 import { DOCUMENT_KINDS } from '../lib/labels';
+import { initialSpecification, specificationFields } from './specification';
 
 export type FormValues = Record<string, unknown>;
 export type FormErrors = Record<string, string>;
@@ -8,7 +9,9 @@ export type FormErrors = Record<string, string>;
 export function initialValues(fields: FormField[]): FormValues {
   const out: FormValues = {};
   for (const f of fields) {
-    if (f.type === 'lines') {
+    if (f.type === 'spec') {
+      out[f.name] = { ...initialValues(specificationFields), ...initialSpecification(f.default) };
+    } else if (f.type === 'lines') {
       out[f.name] = Array.isArray(f.default) ? (f.default as FormValues[]).map((row) => ({ ...row })) : [];
     } else if (f.type === 'checkbox') {
       out[f.name] = Boolean(f.default);
@@ -26,8 +29,14 @@ function isEmpty(value: unknown) {
 export function validateValues(fields: FormField[], values: FormValues, prefix = ''): FormErrors {
   const errors: FormErrors = {};
   for (const f of fields) {
+    if (f.when && values[f.when.key] !== f.when.value) continue;
     const key = prefix ? `${prefix}.${f.name}` : f.name;
     const value = values[f.name];
+
+    if (f.type === 'spec') {
+      Object.assign(errors, validateValues(specificationFields, value as FormValues, key));
+      continue;
+    }
 
     if (f.type === 'lines') {
       const rows = Array.isArray(value) ? (value as FormValues[]) : [];
@@ -60,6 +69,12 @@ export function buildPayload(fields: FormField[], values: FormValues): FormValue
   const out: FormValues = {};
   for (const f of fields) {
     const value = values[f.name];
+    if (f.when && values[f.when.key] !== f.when.value) continue;
+    if (f.type === 'spec') {
+      const spec = value as FormValues;
+      out[f.name] = { fx: spec.fx, flags: spec.flags, similarity_margin: spec.similarity_margin, ...buildPayload(specificationFields, spec) };
+      continue;
+    }
 
     if (f.type === 'lines') {
       const rows = Array.isArray(value) ? (value as FormValues[]) : [];
@@ -123,6 +138,7 @@ function FieldList({ fields, values, onChange, errors, path, documents }: ListPr
   return (
     <div className="form-grid">
       {fields.map((f) => {
+        if (f.when && values[f.when.key] !== f.when.value) return null;
         const childPath = path ? `${path}.${f.name}` : f.name;
         return (
           <FieldControl
@@ -163,6 +179,11 @@ function FieldControl({ field: f, value, path, errors, documents, onChange }: Co
     </>
   );
 
+  if (f.type === 'spec') {
+    return <fieldset className="theme-spec"><legend>{f.label}</legend>
+      <FieldList fields={specificationFields} values={value as FormValues} onChange={onChange} errors={errors} path={path} />
+    </fieldset>;
+  }
   if (f.type === 'lines') {
     return (
       <LinesEditor field={f} rows={Array.isArray(value) ? (value as FormValues[]) : []} path={path} errors={errors} documents={documents} onChange={onChange} />
@@ -246,6 +267,7 @@ interface LinesProps {
 
 function LinesEditor({ field, rows, path, errors, documents, onChange }: LinesProps) {
   const error = errors[path];
+  const item = field.itemLabel ?? 'renglón';
   return (
     <fieldset className="field form-full">
       <legend>
@@ -253,11 +275,11 @@ function LinesEditor({ field, rows, path, errors, documents, onChange }: LinesPr
         {field.required && <span className="req" aria-hidden="true"> *</span>}
       </legend>
       {field.help && <div className="field-help">{field.help}</div>}
-      {rows.length === 0 && <div className="field-help">Todavía no hay renglones.</div>}
+      {rows.length === 0 && <div className="field-help">Todavía no se agregaron elementos.</div>}
       {rows.map((row, i) => (
         <div className="line-row" key={i}>
           <div className="line-row-head">
-            <strong>Renglón {i + 1}</strong>
+            <strong>{item[0]!.toUpperCase() + item.slice(1)} {i + 1}</strong>
             <button type="button" className="text-btn" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
               Quitar
             </button>
@@ -273,7 +295,7 @@ function LinesEditor({ field, rows, path, errors, documents, onChange }: LinesPr
         </div>
       ))}
       <button type="button" className="btn secondary small" onClick={() => onChange([...rows, initialValues(field.fields ?? [])])}>
-        Agregar renglón
+        Agregar {item}
       </button>
       {error && <div className="form-error show" role="alert">{error}</div>}
     </fieldset>

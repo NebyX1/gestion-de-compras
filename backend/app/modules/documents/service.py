@@ -21,7 +21,7 @@ def store_version(doc, content, filename, user, assignment=None, case=None, enqu
     sealed = bool(doc.envelope_id and db.session.get(Envelope, doc.envelope_id).opened_at is None)
     status = 'held_sealed' if sealed else ('held_confidential' if doc.classification == 'confidential' else 'pending')
     ver = DocumentVersion(document_id=doc.id, version=version, storage_key=key, sha256=sha, size=len(content), mime=info['mime'], original_name=safe_filename(filename),
-                          text_status=status, page_count=info['page_count'], uploaded_by=user.id)
+                          text_status=status, page_count=info['page_count'], uploaded_by=user.id if user else None)
     db.session.add(ver)
     db.session.flush()
     if status == 'pending':
@@ -39,13 +39,16 @@ def create_document(case, user, content, filename, kind, title, classification, 
     require(3 <= len(title) <= 255, 'validation', 'El título debe tener entre 3 y 255 caracteres.', 422, {'title': 'Entre 3 y 255.'})
     if envelope is not None:
         require(envelope.case_id == case.id, 'validation', 'Sobre inválido.', 422)
+        require(envelope.channel != 'portal' or user is None, 'immutable',
+                'Los originales presentados por el proveedor se conservan tal como se recibieron.', 409)
         require(envelope.opened_at is None, 'sealed', 'El sobre ya fue abierto: no se incorporan nuevos originales.', 409)
         if envelope.status == 'received':
             require(utcnow() <= envelope.deadline_at, 'deadline_passed', 'El plazo de recepción venció: no se pueden incorporar originales a este sobre.', 409)
         kind = kind if kind in ('oferta', 'anexo_confidencial') else 'oferta'
         if kind == 'anexo_confidencial':
             classification = 'confidential'
-    doc = Document(case_id=case.id, kind=kind, title=title, classification=classification, envelope_id=envelope.id if envelope else None, created_by=user.id,
+    require(user is not None or (envelope and envelope.channel == 'portal'), 'forbidden', 'Se requiere una presentación en el portal.', 403)
+    doc = Document(case_id=case.id, kind=kind, title=title, classification=classification, envelope_id=envelope.id if envelope else None, created_by=user.id if user else None,
                    external_reference=external_reference)
     db.session.add(doc)
     db.session.flush()

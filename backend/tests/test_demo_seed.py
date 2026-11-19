@@ -45,6 +45,20 @@ def test_every_role_gets_a_demo_user(app, seeded):
             assert db.session.query(UserRole).filter_by(user_id=user.id, role_code=role, revoked_at=None).count() == 1
 
 
+def test_seed_publishes_three_open_examples_and_one_human_award(app, seeded):
+    assert not [(r['html_id'], r['failure']) for r in seeded[0]['cases'] if r['html_id'].startswith('PORTAL-') and r.get('failure')]
+    public = app.test_client()
+    listing = public.get('/api/v1/public/tenders?per_page=100').get_json()['items']
+    examples = [item for item in listing if item['is_demo']]
+    assert [item['status'] for item in examples] == ['open', 'open', 'open', 'awarded']
+    example = next(row for row in examples if row['status'] == 'awarded')
+    detail = public.get('/api/v1/public/tenders/' + example['code']).get_json()
+    award = detail['award']
+    assert award['supplier'] == 'Camino Seguro · demo' and award['recommended_supplier'] == 'Señal Vial Serrana · demo'
+    assert award['evaluation_version'] == 1 and award['lines'][0]['amount'] == '336720.00'
+    assert award['followed_recommendation'] is False and award['departure_reason'] and award['ai_explanation'] is None
+
+
 def test_comparison_examples_show_freight_pending_review_and_tie(app, seeded):
     with app.app_context():
         def result(key):

@@ -58,10 +58,11 @@ def spec_json(spec):
 
 def _offer_json(offer, names):
     data = db.session.scalar(db.select(OfferDataVersion).where(OfferDataVersion.offer_id == offer.id, OfferDataVersion.version == offer.data_version)) if offer.data_version else None
+    submission = db.session.get(PortalSubmission, offer.envelope_id)
     reviews = evals.latest_reviews(offer.id)
     scores = evals.latest_manual_scores(offer.id)
     return {'id': offer.id, 'supplier_id': offer.supplier_id, 'supplier': offer.supplier.name, 'currency': offer.currency, 'status': offer.status,
-            'data_version': offer.data_version,
+            'data_version': offer.data_version, 'technical_description': submission.original['technical_description'] if submission else None,
             'data': None if not data else {'prices_include_tax': data.prices_include_tax, 'freight': dstr(data.freight), 'freight_includes_tax': data.freight_includes_tax,
                                            'freight_tax_rate': dstr(data.freight_tax_rate), 'discount_total': dstr(data.discount_total), 'delivery_days': data.delivery_days,
                                            'warranty_months': data.warranty_months, 'delivery_terms': data.delivery_terms, 'reason': data.reason,
@@ -129,6 +130,11 @@ def case_detail(user, case, with_actions=True):
     out['evaluation'] = _evaluation_json(cur) if cur else None
     if sees_offers and cur and cur.status == 'current':
         out['evaluation']['offer_decisions'] = offer_decisions(cur.result)
+        from app.ai.assist import draft_json
+        from app.ai import recommendation
+        draft = evals.initial_ai_explanation(cur) if can('ai.use') else None
+        out['evaluation']['ai_explanation'] = draft_json(draft) if draft else None
+        out['evaluation']['ai_advice'] = recommendation.serialize(recommendation.initial(cur), cur) if can('ai.use') else None
     out['evaluations'] = [{'id': e.id, 'version': e.version, 'status': e.status, 'created_at': iso_utc(e.created_at), 'recommended_offer_id': e.recommended_offer_id,
                            'stale_reason': e.stale_reason} for e in sorted(evs, key=lambda e: -e.version)]
     out['opinions'] = [{'id': o.id, 'evaluation_id': o.evaluation_id, 'recommended_offer_id': o.recommended_offer_id, 'reference': o.reference, 'grounds': o.grounds,

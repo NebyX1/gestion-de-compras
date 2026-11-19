@@ -3,7 +3,8 @@ from datetime import timedelta
 from decimal import Decimal
 from app.extensions import db
 from app.infrastructure.models import (Availability, BudgetLine, SpecVersion, CaseAuthorization, PublicityRecord, Envelope, Offer, OfferDataVersion,
-                                       OfferLine, Supplier, DeadlineExtension)
+                                       OfferLine, Supplier, DeadlineExtension, DocumentVersion)
+from app.modules.portal.pliego import eligible_versions
 from app.modules.evaluation.service import mark_dependents_stale
 from app.modules.procurement import forms as F, inputs as inp
 from app.modules.procurement.actions.common import doc_in_case, effective_deadline, current_round
@@ -89,20 +90,21 @@ def availability_revoke(ctx, data):
 # ---------------------------------------------------------------- pliego
 
 def _spec_form(ctx):
-    return [F.field('spec', 'Pliego', 'spec', default=_spec_defaults(ctx))]
-
-
-def _spec_defaults(ctx):
-    from app.modules.procurement.service import spec_content
-    s = ctx.spec
-    return {**spec_content(s), 'status': s.status, 'version': s.version} if s else None
+    from app.modules.procurement.serializers import spec_json
+    fields = [F.field('spec', 'Pliego', 'spec', default=spec_json(ctx.spec) if ctx.spec else None)]
+    if ctx.spec and ctx.spec.status == 'approved':
+        fields.append(F.field('change_reason', 'Motivo de la nueva versión', 'textarea', rows=2))
+    return fields
 
 
 def _spec_save_blockers(ctx):
-    if db.session.scalar(db.select(CaseAuthorization.id).where(CaseAuthorization.case_id == ctx.case.id, CaseAuthorization.spec_version_id == (ctx.spec.id if ctx.spec else 0),
-                                                              CaseAuthorization.status == 'active')) and ctx.case.status == 'preparation':
-        return []  # una nueva versión es válida: requerirá nueva aprobación y autorización
+    if ctx.case.status == 'receiving_offers' and ctx.spec.reception_channel == 'portal' and _received_in_round(ctx):
+        return ['Ya se recibieron ofertas para este pliego. Podés prorrogar el plazo o tramitar un nuevo llamado.']
     return []
+
+
+def _received_in_round(ctx):
+    return db.session.scalar(db.select(Envelope.id).where(Envelope.case_id == ctx.case.id, Envelope.round == current_round(ctx.case)).limit(1))
 
 
 @action('spec.save', 'Editar pliego', 'spec.manage', {'preparation', 'receiving_offers'}, form=_spec_form, blockers=_spec_save_blockers,
@@ -114,14 +116,20 @@ def spec_save(ctx, data):
         content['mode'], content['criteria'] = 'framework', []
     reason = inp.text(data, 'change_reason', 'Motivo del cambio', 10, 500, required=current.status == 'approved', default=None)
     if current.status == 'approved':
+        renewing_portal = case.status == 'receiving_offers' and 'portal' in (current.reception_channel, content['reception_channel'])
+        if renewing_portal:
+            require(not _received_in_round(ctx), 'blocked', 'Ya se recibieron ofertas para este pliego.', 422)
         new = SpecVersion(case_id=case.id, version=current.version + 1, status='draft', created_by=ctx.user.id, mode=content['mode'], minimum_text='x',
                           similarity_margin=Decimal('0.05'), change_reason=reason)
         db.session.add(new)
         db.session.flush()
         apply_spec(new, content)
         ctx._cache.pop('spec', None)
-        return {'type': 'spec', 'id': new.id, 'reason': f'Nueva versión {new.version} del pliego (la {current.version} permanece vigente hasta aprobar la nueva). {reason}',
-                'details': {'version': new.version, 'previous': current.version}}
+        result = {'type': 'spec', 'id': new.id, 'reason': f'Nueva versión {new.version} del pliego. {reason}',
+                  'details': {'version': new.version, 'previous': current.version}}
+        if renewing_portal:
+            result.update(status='preparation', reason='Recepción suspendida hasta autorizar y publicar el pliego actualizado. ' + reason)
+        return result
     apply_spec(current, content)
     return {'type': 'spec', 'id': current.id, 'reason': f'Borrador del pliego (versión {current.version}) actualizado.', 'details': {'version': current.version}}
 
@@ -204,13 +212,26 @@ def call_authorize(ctx, data):
 # ---------------------------------------------------------------- publicidad
 
 def _publicity_form(ctx):
+    portal = ctx.spec is not None and ctx.spec.reception_channel == 'portal'
+    file_fields = []
+    if portal:
+        versions = db.session.scalars(eligible_versions(ctx.case.id).order_by(DocumentVersion.id.desc()))
+        options = [(v.id, f'{v.document.title} · v{v.version} · {v.original_name}') for v in versions]
+        field = F.field('portal_version_id', 'Archivo de pliego para descargar desde el portal', 'select', required=False,
+                        options=F.options(options), help='Para adjuntar un archivo, cargalo en Documentos como pliego de clasificación pública y elegí la versión que revisaste.')
+        file_fields.append({**field, 'when': {'key': 'state', 'value': 'portal'}})
+    states = [('pending', 'Pendiente de publicación'),
+              ('portal', 'Publicar en el portal departamental') if portal else ('external_constancia', 'Constancia de publicación externa (ARCE/sitio)')]
     return [
-        F.field('kind', 'Tipo de actuación', 'select', options=F.options([('convocatoria', 'Convocatoria publicada'), ('invitacion', 'Invitación a proveedores')])),
-        F.field('state', 'Estado', 'select', options=F.options([('pending', 'Pendiente: aún no publicada'), ('external_constancia', 'Constancia de publicación externa (ARCE/sitio)')]),
-                help='“Publicación confirmada por integración” no está disponible: no hay integración conectada.'),
+        F.field('kind', 'Tipo de actuación', 'select', options=F.options([('convocatoria', 'Convocatoria pública')] if portal else
+                                                                        [('convocatoria', 'Convocatoria publicada'), ('invitacion', 'Invitación a proveedores')]),
+                default='convocatoria' if portal else None),
+        F.field('state', 'Estado', 'select', options=F.options(states), default='portal' if portal else None,
+                help='Al publicar en el portal se muestran el objeto, los renglones, los requisitos y los criterios del pliego aprobado.'),
         F.field('reference', 'Referencia de la publicación o invitación', required=False, help='Obligatoria cuando hay constancia externa.'),
         F.field('published_on', 'Fecha de publicación', 'date', required=False),
         F.field('document_id', 'Constancia (documento)', 'document', required=False),
+        *file_fields,
         F.field('notice_justification', 'Justificación de antelación reducida', 'textarea', required=False, rows=2,
                 help='Solo si la antelación es menor a la de referencia; requiere verificación jurídica.'),
     ]
@@ -226,28 +247,41 @@ def _publicity_blockers(ctx):
 
 
 @action('publicity.register', 'Registrar publicidad y abrir recepción', 'publicity.register', {'preparation'}, form=_publicity_form, blockers=_publicity_blockers,
-        description='Distingue publicación pendiente de constancia externa. Una constancia interna no prueba que la publicación haya ocurrido.')
+        description='Publicá la convocatoria en el canal definido en el pliego para abrir la recepción de ofertas.')
 def publicity_register(ctx, data):
-    state = inp.choice(data, 'state', 'Estado', ('pending', 'external_constancia'))
+    spec, now = ctx.spec, utcnow()
+    portal = spec.reception_channel == 'portal'
+    state = inp.choice(data, 'state', 'Estado', ('pending', 'portal') if portal else ('pending', 'external_constancia'))
+    kind = inp.choice(data, 'kind', 'Tipo', ('convocatoria',) if state == 'portal' else ('convocatoria', 'invitacion'))
     ref = inp.text(data, 'reference', 'Referencia', 3, 200, required=state == 'external_constancia')
-    published = inp.day(data, 'published_on', 'Fecha de publicación', required=state == 'external_constancia')
+    published = to_local(now).date() if state == 'portal' else inp.day(data, 'published_on', 'Fecha de publicación', required=state == 'external_constancia')
     doc = doc_in_case(ctx, data.get('document_id'))
     note = None
-    spec = ctx.spec
-    if state == 'external_constancia' and spec.offer_deadline:
+    version_id = inp.integer(data, 'portal_version_id', 'Versión documental a publicar', minimum=1, required=False)
+    if version_id:
+        require(state == 'portal' and db.session.scalar(eligible_versions(ctx.case.id).where(DocumentVersion.id == version_id)) is not None,
+                'invalid_public_file', 'Elegí una versión de pliego público de este expediente para acompañar su publicación.', 422,
+                {'portal_version_id': 'Versión no disponible para publicación.'})
+    if state == 'portal':
+        require(spec.offer_deadline and spec.offer_deadline > now, 'deadline_passed', 'El plazo del llamado debe ser futuro para publicar.', 409)
+        ref = f'Portal · {ctx.case.code} · v{spec.version}'
+    if state != 'pending' and spec.offer_deadline:
         check = notice_check(ctx.case.procedure_type, published, to_local(spec.offer_deadline).date(), False, data.get('notice_justification'))
         if check['applies'] and not check['ok']:
             raise ApiError('notice_short', check['warnings'][0], 422, {'notice_justification': 'Justificá la antelación reducida.'}, extra={'warnings': check['warnings']})
         note = ' '.join(check['warnings']) or None
-    rec = PublicityRecord(case_id=ctx.case.id, spec_version_id=spec.id, kind=inp.choice(data, 'kind', 'Tipo', ('convocatoria', 'invitacion')), state=state,
-                          reference=ref, published_at=utcnow() if state != 'pending' else None, document_id=doc.id if doc else None,
-                          notice_note=note, created_by=ctx.user.id)
+    rec = PublicityRecord(case_id=ctx.case.id, spec_version_id=spec.id, kind=kind, state=state,
+                          reference=ref, published_at=now if state != 'pending' else None, document_id=doc.id if doc else None,
+                          portal_version_id=version_id, notice_note=note, created_by=ctx.user.id)
     db.session.add(rec)
     db.session.flush()
     result = {'type': 'publicity', 'id': rec.id, 'reference': ref, 'reason': f'Publicidad: {state}.', 'details': {'state': state, 'kind': rec.kind, 'warning': note}}
+    if version_id:
+        result['details']['portal_version_id'] = version_id
     if state != 'pending':
         result['status'] = 'receiving_offers'
-        result['reason'] = 'Constancia de publicación externa registrada; se abre la recepción de ofertas.'
+        result['reason'] = ('Convocatoria publicada en el portal departamental. Se abrió la recepción de ofertas.' if state == 'portal'
+                            else 'Constancia de publicación externa registrada; se abre la recepción de ofertas.')
     return result
 
 

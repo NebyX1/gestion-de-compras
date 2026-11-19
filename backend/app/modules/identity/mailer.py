@@ -2,6 +2,7 @@
 import smtplib
 from flask import current_app
 from flask_mail import Message, Connection
+from app.config import APP_NAME
 from app.extensions import mail
 
 
@@ -28,8 +29,8 @@ def send_email(subject, recipients, html_body, text_body):
 
 
 def send_2fa_email(to_email, code):
-    html = (f'<div style="font-family:Segoe UI,Arial,sans-serif;color:#22243b"><h2>Compra Clara · Lavalleja</h2>'
+    html = (f'<div style="font-family:Segoe UI,Arial,sans-serif;color:#22243b"><h2>{APP_NAME}</h2>'
             f'<p>Tu código de verificación es:</p><p style="font-size:28px;letter-spacing:8px;font-weight:700">{code}</p>'
             f'<p>Vence en 10 minutos. Si no iniciaste sesión, ignorá este mensaje.</p></div>')
-    send_email('[Compra Clara] Código de verificación', [to_email], html,
+    send_email(f'[{APP_NAME}] Código de verificación', [to_email], html,
                f'Tu código de verificación es {code}. Vence en 10 minutos.')

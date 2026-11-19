@@ -7,7 +7,7 @@ redondea para mostrar. No ejecuta código ni expresiones suministradas por usuar
 from decimal import Decimal, InvalidOperation
 from app.shared.contracts import money, dstr, display2
 
-ENGINE_VERSION = '1.0.0'
+ENGINE_VERSION = '1.0.1'
 MODES = ('weighted', 'min_price', 'framework')
 OPERATORS = {
     'gte': lambda a, b: a >= b, 'lte': lambda a, b: a <= b, 'gt': lambda a, b: a > b,
@@ -70,6 +70,8 @@ def offer_totals(offer, lines, currency, fx):
     freight_total = money(freight if offer.get('freight_includes_tax', True) else freight * (1 + D(offer.get('freight_tax_rate', 0), 'freight_tax_rate') / HUNDRED))
     discount_total = D(offer.get('discount_total', 0), 'discount_total')
     commercial = money(lines_total + freight_total - discount_total)
+    if commercial < 0:
+        pending.append('El descuento supera el importe de la oferta. Verificá los datos antes de comparar.')
     offer_ccy = offer.get('currency') or currency
     rate = Decimal(1)
     if offer_ccy != currency:
@@ -185,7 +187,7 @@ def evaluate(inp):
             for c in criteria:
                 weight = D(c['weight'], 'weight')
                 if c['type'] == 'price_ratio':
-                    p = weight * reference / comp
+                    p = weight if comp == 0 else weight * reference / comp
                 elif c['type'] == 'scale':
                     value = (r['_offer'].get('attributes') or {}).get(c['attribute'])
                     if value is None:
@@ -207,7 +209,7 @@ def evaluate(inp):
                 points.append({'code': c['code'], 'name': c['name'], 'max': dstr(weight), 'points': dstr(p)})
             score = sum((Decimal(x['points']) for x in points), Decimal(0))
         else:
-            score = HUNDRED * reference / comp
+            score = HUNDRED if comp == 0 else HUNDRED * reference / comp
             points = [{'code': 'price', 'name': 'Precio (índice base 100; el orden es por importe)', 'max': '100', 'points': dstr(score)}]
         if row_pending:
             r['status'] = 'pending'
@@ -231,7 +233,7 @@ def evaluate(inp):
     similar = False
     if len(ranked) > 1 and not tie:
         a, b = keyf(ranked[0]), keyf(ranked[1])
-        similar = ((a - b) / a <= margin) if mode == 'weighted' else ((b - a) / a <= margin)
+        similar = bool(a) and abs(a - b) / a <= margin
     for i, t in enumerate(ranked, 1):
         t[0]['rank'] = i
 

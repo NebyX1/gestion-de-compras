@@ -1,12 +1,16 @@
-# Gestión de Compras / Compra Clara
+# Compras Públicas Lavalleja
 
-Aplicación web para administrar expedientes de compras públicas desde la solicitud hasta el cierre: preparación, ofertas, evaluación, decisión, orden, recepción, factura y pago. El sistema combina un flujo de trabajo controlado, documentos versionados, reglas por vigencia, permisos por rol y una auditoría funcional encadenada.
+Portal de compras públicas de Lavalleja y escritorio de gestión de expedientes. Los proveedores consultan llamados y presentan ofertas. La Intendencia tramita cada compra desde la solicitud hasta el pago y puede publicar la resolución y sus fundamentos.
 
 > Estado: el núcleo está implementado y verificado localmente. Antes de operar con datos institucionales reales deben validarse el despliegue, el SMTP, el almacenamiento definitivo, las reglas jurídicas, las integraciones oficiales y la política de IA.
 
 ## Qué resuelve
 
 - Centraliza los datos, actuaciones y documentos de cada expediente.
+- Ofrece un catálogo público con búsqueda por título, área o código y filtros por estado. Cada llamado tiene un enlace permanente y un formulario propio.
+- Recibe ofertas por renglón con precios, impuestos, flete, plazo, garantía, descripción técnica y un adjunto opcional. La presentación confirma el correo del proveedor y entrega un comprobante.
+- Publica el pliego seleccionado y la versión documental autorizada. Los sobres y sus anexos quedan reservados hasta la apertura.
+- Permite consultar una recomendación de IA sobre las ofertas admisibles y publicar el fundamento de la resolución humana, incluido un eventual apartamiento.
 - Publica al cliente solo las acciones válidas para el estado y el rol del usuario.
 - Registra la trazabilidad de cambios, decisiones, evidencias y responsables.
 - Evalúa ofertas con un motor determinista, sin depender de IA.
@@ -56,7 +60,25 @@ El motor de evaluación de [backend/app/modules/evaluation/engine.py](backend/ap
 - permite un escenario aislado sin persistencia;
 - produce una trazabilidad reproducible del cálculo.
 
-La IA puede asistir con extracción o explicación, pero no ejecuta el motor, no adjudica ni modifica un acto.
+Con un proveedor Ollama habilitado, el evaluador puede solicitar una recomendación adicional de IA. El modelo compara alias de ofertas admisibles, puede proponer una o abstenerse y devuelve un fundamento. Se conserva la primera respuesta válida para esa evaluación. La adjudicación corresponde al ordenador competente.
+
+### Usar el portal
+
+| Ruta | Uso |
+|---|---|
+| `/` | Buscar convocatorias y filtrar por estado. |
+| `/licitaciones/:id` | Consultar el detalle, los renglones, los criterios, el plazo y, si corresponde, el resultado. El identificador es el código del expediente. |
+| `/licitaciones/:id/ofertar` | Identificar al proveedor, cotizar y confirmar con el código enviado por correo. |
+| `/resultados` | Consultar las adjudicaciones publicadas, sus importes y sus fundamentos. |
+| `/gestion` | Ingresar al escritorio del personal municipal. |
+
+1. En el escritorio, creá una solicitud e indicá qué necesitás, los renglones y al menos un requisito mínimo. En preparación, editá el pliego, fijá el cierre en hora de Uruguay y elegí **Portal público de Lavalleja** como canal de recepción.
+2. Completá el encuadre, la disponibilidad, la aprobación del pliego y la autorización del llamado con los roles correspondientes. En la acción de publicidad elegí **Convocatoria** y la publicación en el portal. Podés incorporar una versión específica del documento de pliego.
+3. El proveedor abre el enlace del llamado, completa las tres etapas y conserva el comprobante. Un proveedor existente debe utilizar su correo registrado. El personal autorizado puede actualizarlo en **Proveedores** con una referencia de respaldo. La comprobación del buzón y la verificación en RUPE son controles distintos.
+4. Tras el cierre, registrá el acta de apertura. Las ofertas digitales alimentan el comparador con los datos originales. Revisá los requisitos y calculá la evaluación. Para obtener el criterio del modelo, elegí **Solicitar recomendación de IA** antes de adjudicar.
+5. Registrá el dictamen, los controles y la resolución. Si la elección difiere de una recomendación, indicá el motivo. En **Publicar resultado en el portal**, revisá los datos públicos y la recomendación inicial de IA si existe. El resultado queda disponible en el mismo enlace del llamado.
+
+La organización del catálogo, las fichas y las rutas por convocatoria sigue [Lavalleja Concursa](https://github.com/NebyX1/lavalleja-concursa). El formulario por etapas y la revisión previa al envío toman como referencia [Hogares estudiantiles](https://github.com/IntendenciaDeLavalleja/hogares-frontend). El escudo de la Intendencia y el favicon se copiaron de los [recursos originales de Hogares estudiantiles](https://github.com/IntendenciaDeLavalleja/hogares-frontend/tree/c6346a04474585e2102c60703a1c492e3a6cc91a/public).
 
 ### Identidad, permisos y documentación
 
@@ -101,7 +123,7 @@ Los volúmenes `db-data`, `documents` y `models` conservan datos entre reinicios
 
 - **Backend:** Python 3.11, Flask 3, SQLAlchemy 2, Alembic/Flask-Migrate, Gunicorn.
 - **Persistencia:** MariaDB 11.4; migraciones SQLAlchemy/Alembic.
-- **Frontend:** React 19, TypeScript, Vite 6, React Router, TanStack Query, React Hook Form, Axios y Zustand.
+- **Frontend:** React 19, TypeScript, Vite 6, Fluent UI React v9 (Fluent 2), React Router, TanStack Query, React Hook Form, Axios y Zustand. El tema claro y el nocturno se pueden alternar desde el encabezado.
 - **Entrega:** Docker Compose, nginx 1.27, imágenes Alpine/SLIM.
 - **Seguridad:** Flask-Login, Argon2, CSRF, 2FA por correo, cookies y cabeceras endurecidas.
 - **Documentos:** almacenamiento local privado en compose; adaptador MinIO disponible en código pero no conectado al stack.
@@ -142,7 +164,7 @@ Abrir:
 - correo de pruebas: <http://127.0.0.1:8025>;
 - salud pública: <http://127.0.0.1:8080/healthz>.
 
-El modo local entra automáticamente como usuario de Compras en `Pruebas locales`.
+La portada es pública. En el override local, **Acceso interno** abre el escritorio de Compras en `Pruebas locales`. Usá Mailpit para leer los códigos de presentación de prueba. En un despliegue institucional, configurá el SMTP real.
 
 ### Docker Compose directo, sin PowerShell
 
@@ -213,7 +235,6 @@ Set-Location backend
 Set-Location ..\frontend
 npm run typecheck
 npm run build
-npm run test:e2e
 ```
 
 Los resultados de verificación documentados están en [docs/RESULTADOS_PRUEBAS.md](docs/RESULTADOS_PRUEBAS.md).
@@ -227,7 +248,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml exec backend `
   flask --app wsgi seed-demo --confirm
 ```
 
-Carga proveedores y expedientes ficticios, incluidos casos para comparar ofertas por precio, puntaje, empate, evidencia pendiente y exclusión. Es idempotente: volver a ejecutarla no duplica los ejemplos. Usa únicamente datos sintéticos.
+Carga proveedores y expedientes ficticios, incluidos tres llamados abiertos, una adjudicación publicada y casos para comparar ofertas por precio, puntaje, empate, evidencia pendiente y exclusión. Es idempotente. Con la semilla cargada y el stack levantado, ejecutá `npm run test:e2e` desde `frontend`. Las pruebas usan Chromium de Playwright (`npx playwright install chromium`) y la URL local del compose. Para probar otra instancia de demostración, configurá `E2E_BASE_URL`.
 
 ## Scripts operativos
 

@@ -32,7 +32,12 @@ def spec_requirement(spec, requirement_id):
 
 def effective_deadline(case, spec):
     from app.infrastructure.models import DeadlineExtension
-    ext = db.session.scalars(db.select(DeadlineExtension).where(DeadlineExtension.case_id == case.id).order_by(DeadlineExtension.id.desc())).first()
+    if not spec:
+        return None
+    extensions = db.select(DeadlineExtension).where(DeadlineExtension.case_id == case.id)
+    if spec.approved_at:
+        extensions = extensions.where(DeadlineExtension.created_at >= spec.approved_at)
+    ext = db.session.scalars(extensions.order_by(DeadlineExtension.id.desc())).first() if spec.status == 'approved' else None
     if ext:
         return ext.new_deadline
     return spec.offer_deadline if spec else None

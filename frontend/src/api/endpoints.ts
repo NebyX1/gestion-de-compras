@@ -4,6 +4,7 @@ import type {
   AdminRole,
   AdminUser,
   AiDraft,
+  AiAdvice,
   AiTask,
   Area,
   AuditItem,
@@ -88,6 +89,8 @@ export const organizationApi = {
   areas: () => request(api.get<{ items: Area[] }>('/areas')),
   suppliers: (q?: string) => request(api.get<{ items: Supplier[] }>('/suppliers', { params: { q: q || undefined } })),
   createSupplier: (body: Record<string, unknown>) => request(api.post<Supplier>('/suppliers', body)),
+  supplierContact: (id: number, email: string, expected: string | null, reference: string) =>
+    request(api.patch<Supplier>(`/suppliers/${id}/contact`, { contact_email: email, expected_email: expected, evidence_ref: reference })),
   supplierStatus: (id: number, body: Record<string, unknown>) =>
     request(api.post<Supplier>(`/suppliers/${id}/status`, body)),
 };
@@ -104,7 +107,7 @@ export const auditApi = {
   verify: () => request(api.get<AuditVerification>('/audit/verify')),
   exportCsv: async () => {
     const res = await api.get<Blob>('/audit/export', { responseType: 'blob' });
-    triggerDownload(res.data, 'auditoria-compra-clara.csv');
+    triggerDownload(res.data, 'auditoria-compras-publicas-lavalleja.csv');
   },
 };
 
@@ -129,6 +132,7 @@ export const adminApi = {
 };
 
 export const aiApi = {
+  recommend: (code: string) => request(api.post<AiAdvice>(`/ai/cases/${encodeURIComponent(code)}/recommend`, { confirm_egress: true }, { timeout: 150000 })),
   extract: (code: string, offerId: number, documentId: number) =>
     request(api.post<AiTask>(`/ai/cases/${encodeURIComponent(code)}/extract`, { offer_id: offerId, document_id: documentId })),
   task: (id: number) => request(api.get<AiTask>(`/ai/tasks/${id}`)),

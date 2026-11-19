@@ -93,12 +93,15 @@ def _headers(cfg):
     return h
 
 
-def _payload(cfg, messages, stream, options):
-    return {'model': effective_model(cfg), 'messages': messages, 'stream': stream, 'think': False,
-            'options': {'temperature': 0.1, 'num_predict': 1400, **(options or {})}}
+def _payload(cfg, messages, stream, options, response_schema=None):
+    payload = {'model': effective_model(cfg), 'messages': messages, 'stream': stream, 'think': False,
+               'options': {'temperature': 0.1, 'num_predict': 1400, **(options or {})}}
+    if response_schema and not is_direct_cloud(cfg['host']) and not cfg['model'].lower().endswith((':cloud', '-cloud')):
+        payload['format'] = response_schema
+    return payload
 
 
-def chat(messages, options=None):
+def chat(messages, options=None, response_schema=None):
     """Una respuesta completa. Devuelve (texto, metadatos)."""
     cfg = check_ready()
     sem = _semaphore(cfg['concurrency'])
@@ -111,7 +114,7 @@ def chat(messages, options=None):
         for attempt in range(attempts):
             try:
                 with httpx.Client(timeout=httpx.Timeout(cfg['timeout'], connect=10)) as client:
-                    payload = _payload(cfg, messages, False, options)
+                    payload = _payload(cfg, messages, False, options, response_schema)
                     r = client.post(f'{cfg["host"]}/api/chat', json=payload, headers=_headers(cfg))
                     if r.status_code == 400 and 'think' in r.text.lower():
                         payload.pop('think')

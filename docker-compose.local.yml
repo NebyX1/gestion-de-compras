@@ -13,13 +13,13 @@ services:
       ALLOW_DEMO_SEED: "true"
       AI_ENABLED: "true"
       OLLAMA_HOST: http://host.docker.internal:11434
-      OLLAMA_MODEL: deepseek-v4.1-flash:cloud
+      OLLAMA_MODEL: ${LOCAL_OLLAMA_MODEL:-deepseek-v4.1-flash:cloud}
       OLLAMA_API_KEY: ""
   worker:
     environment:
       AI_ENABLED: "true"
       OLLAMA_HOST: http://host.docker.internal:11434
-      OLLAMA_MODEL: deepseek-v4.1-flash:cloud
+      OLLAMA_MODEL: ${LOCAL_OLLAMA_MODEL:-deepseek-v4.1-flash:cloud}
       OLLAMA_API_KEY: ""
   web:
     ports:

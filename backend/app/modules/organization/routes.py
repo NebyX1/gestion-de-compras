@@ -1,5 +1,4 @@
 """Proveedores (con estados RUPE/impedimentos respaldados), áreas y créditos registrados."""
-import re
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
 from sqlalchemy.exc import IntegrityError
@@ -11,9 +10,9 @@ from app.modules.identity.service import auth_required, perm_required
 from app.modules.procurement import inputs as inp
 from app.shared.contracts import dstr, iso_utc
 from app.shared.errors import ApiError, require
+from .contact import TAX_ID, contact_email
 
 bp = Blueprint('organization', __name__, url_prefix='/api/v1')
-TAX_ID = re.compile(r'^[A-Za-z0-9.\-]{5,30}$')
 
 
 def supplier_json(s, with_status=True):
@@ -51,7 +50,7 @@ def create_supplier():
     require(tax is None or TAX_ID.match(tax), 'validation', 'Identificador fiscal inválido.', 422, {'tax_id': 'Formato inválido.'})
     n = (db.session.scalar(db.select(db.func.count(Supplier.id))) or 0) + 1
     s = Supplier(code=f'PR-{n:05d}', name=name, tax_id=tax, country=inp.text(data, 'country', 'País', 2, 2, required=False, default='UY').upper(),
-                 contact_email=inp.text(data, 'contact_email', 'Correo', 5, 120, required=False), created_by=current_user.id)
+                 contact_email=contact_email(data, required=False), created_by=current_user.id)
     db.session.add(s)
     try:
         db.session.flush()
@@ -64,6 +63,28 @@ def create_supplier():
     return jsonify(supplier_json(s)), 201
 
 
+@bp.patch('/suppliers/<int:supplier_id>/contact')
+@perm_required('supplier.manage')
+def update_supplier_contact(supplier_id):
+    data = request.get_json(silent=True)
+    require(isinstance(data, dict), 'validation', 'Datos de contacto inválidos.', 422)
+    email = contact_email(data)
+    reference = inp.text(data, 'evidence_ref', 'Constancia de verificación', 3, 200)
+    supplier = db.session.scalar(db.select(Supplier).where(Supplier.id == supplier_id).with_for_update())
+    require(supplier is not None, 'not_found', 'Proveedor no encontrado.', 404)
+    if email != supplier.contact_email:
+        require('expected_email' in data and supplier.contact_email == data['expected_email'], 'version_conflict',
+                'El contacto cambió desde que abriste la ficha. Actualizá la lista para revisar el correo registrado.', 409)
+        previous = supplier.contact_email
+        supplier.contact_email = email
+        assignment = find_assignment(current_user, 'supplier.manage')
+        audit.record(current_user, 'supplier.contact', 'supplier', supplier.id, reference=reference,
+                     reason='Actualización del correo verificado del proveedor.', details={'previous': previous, 'new': email},
+                     role_code=assignment.role_code, assignment_id=assignment.id)
+    db.session.commit()
+    return jsonify(supplier_json(supplier))
+
+
 @bp.post('/suppliers/<int:supplier_id>/status')
 @perm_required('supplier.manage')
 def supplier_status(supplier_id):
@@ -74,6 +95,8 @@ def supplier_status(supplier_id):
                          state=inp.text(data, 'state', 'Estado', 2, 40), valid_from=inp.day(data, 'valid_from', 'Vigente desde', required=False),
                          valid_to=inp.day(data, 'valid_to', 'Vigente hasta', required=False), evidence_ref=inp.text(data, 'evidence_ref', 'Respaldo', 3, 200),
                          note=inp.text(data, 'note', 'Nota', 1, 500, required=False), verified_by=current_user.id)
+    require(not row.valid_to or not row.valid_from or row.valid_to >= row.valid_from, 'validation',
+            'El fin de vigencia debe ser igual o posterior al inicio.', 422, {'valid_to': 'Revisá la vigencia.'})
     db.session.add(row)
     db.session.flush()
     a = find_assignment(current_user, 'supplier.manage')

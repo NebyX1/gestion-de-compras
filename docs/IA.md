@@ -4,7 +4,7 @@
 
 El perfil `docker-compose.local.yml` habilita IA solo en el stack local y conecta backend y worker al daemon Ollama del equipo (`host.docker.internal:11434`) con `deepseek-v4.1-flash:cloud`. Se verificó una respuesta del modelo mediante la API local de Ollama. El sufijo `:cloud` significa que Ollama envía la inferencia a su servicio cloud: usar este modo únicamente con datos ficticios o autorizados.
 
-`docker-compose.yml` no recibe estos overrides. La configuración de otros entornos debe habilitarse y revisarse por separado.
+Para trabajar con un modelo instalado en el equipo, se puede indicar `LOCAL_OLLAMA_MODEL=phi4-mini:3.8b` en el `.env` del override local. El compose de producción utiliza `OLLAMA_HOST` y `OLLAMA_MODEL`.
 
 ## Configuración en otros entornos
 
@@ -24,7 +24,9 @@ El perfil `docker-compose.local.yml` habilita IA solo en el stack local y conect
 
 Los documentos clasificados fuera de `AI_EGRESS_CLASSES` no se envían. Antes de habilitar en producción, confirmar la clasificación de cada tipo de documento y que el proveedor cumple la normativa aplicable.
 
-En **Comparar ofertas → Explicar con IA**, primero se pide confirmación. La solicitud envía únicamente el método de evaluación y señales booleanas del resultado (por ejemplo, si hubo un empate o quedaron ofertas pendientes), sin montos, nombres, códigos de expediente, documentos ni texto libre del pliego. El cálculo oficial no depende del proveedor ni cambia al consultar la explicación.
+En **Comparar ofertas → Solicitar recomendación de IA**, la persona confirma la consulta. El modelo recibe los requisitos y criterios del pliego, la ponderación, los puntos por criterio, un índice de precio relativo, la entrega y la garantía de cada oferta admisible identificada por alias. La API aplica la política de salida y valida la respuesta. Un alias desconocido, una evaluación obsoleta o una respuesta sin fundamento no generan una recomendación válida.
+
+La primera recomendación válida queda vinculada a la versión evaluada. El modelo puede abstenerse. El ordenador revisa el resultado del pliego, el criterio de IA disponible y el dictamen antes de registrar su decisión. La publicación de la adjudicación permite incorporar el análisis inicial revisado. El motor de puntajes y los controles del expediente siguen disponibles si el proveedor está deshabilitado o no responde.
 
 ## Recuperación de normativa
 
@@ -32,5 +34,5 @@ El comando `flask --app wsgi ai-index-normative` indexa las fuentes normativas p
 
 ## Verificación
 
-- La API local del daemon Ollama respondió con `deepseek-v4.1-flash:cloud`.
+- El flujo de recomendación estructurada se probó también con `phi4-mini:3.8b` en el daemon local, con ofertas ficticias y publicación del apartamiento de la decisión simulada.
 - `Test-Stack.ps1` comprueba la salud de la aplicación; no comprueba disponibilidad del proveedor de IA.

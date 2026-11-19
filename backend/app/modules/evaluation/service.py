@@ -2,7 +2,7 @@
 from decimal import Decimal
 from app.extensions import db
 from app.infrastructure.models import (Offer, OfferDataVersion, Envelope, RequirementReview, ManualScore, Evaluation, Opinion, Intervention,
-                                       DocumentVersion, Document)
+                                       DocumentVersion, Document, AiDraft)
 from app.modules.evaluation import engine
 from app.shared.contracts import canonical_hash, dstr, utcnow
 
@@ -79,6 +79,11 @@ def preview(case, spec, lines):
 
 def current_evaluation(case_id):
     return db.session.scalar(db.select(Evaluation).where(Evaluation.case_id == case_id, Evaluation.status == 'current').order_by(Evaluation.version.desc()))
+
+
+def initial_ai_explanation(evaluation):
+    return db.session.scalar(db.select(AiDraft).where(AiDraft.case_id == evaluation.case_id, AiDraft.evaluation_id == evaluation.id,
+                                                      AiDraft.kind == 'explicacion_comparativa').order_by(AiDraft.id).limit(1))
 
 
 def persist(case, spec, lines, user):

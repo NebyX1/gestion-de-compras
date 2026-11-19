@@ -175,7 +175,12 @@ def _draft_flow(code, kind, instruction, *, anonymous=False):
 @bp.post('/cases/<code>/explain')
 @auth_required
 def explain_with_ai(code):
-    return _draft_flow(code, 'explicacion_comparativa', 'En hasta dos párrafos, explicá en lenguaje simple qué significa el resultado anónimo de la comparación, cómo influye el método del pliego y qué debería verificar la persona. Si no hay recomendación no propongas una. No inventes nombres, importes ni causas no informadas.', anonymous=True)
+    return _draft_flow(code, 'explicacion_comparativa',
+                       'Explicá en hasta dos párrafos el fundamento de la recomendación según el método del pliego. '
+                       'Si hay segunda oferta admisible, usá solo las ventajas y desventajas comparativas informadas. '
+                       'Tener más puntos en un criterio indica el resultado de su escala, no una magnitud concreta. '
+                       'Si hay una única oferta admisible, aclaralo. Sin recomendación, explicá los bloqueos informados. '
+                       'La autoridad decide la adjudicación. No inventes nombres, importes ni requisitos.', anonymous=True)
 
 
 @bp.post('/cases/<code>/draft')
@@ -187,6 +192,22 @@ def draft(code):
             'Dejá entre corchetes los datos que debe completar la comisión. No decidas por ella.' if kind == 'borrador_dictamen' else
             'Redactá un borrador de análisis comparativo de las ofertas, con cuadro textual de importes comparables y observaciones. Máximo 300 palabras.')
     return _draft_flow(code, kind, text)
+
+
+@bp.post('/cases/<code>/recommend')
+@auth_required
+def recommend_supplier(code):
+    from app.ai import recommendation, policy
+    rate_limit('ai-recommend', 10)
+    data = request.get_json(silent=True)
+    require(isinstance(data, dict) and data.get('confirm_egress') is True, 'validation', 'Confirmá el envío de la comparación anonimizada.', 422)
+    try:
+        result, status = recommendation.generate(current_user, code)
+    except policy.EgressBlocked as exc:
+        raise ApiError('egress_blocked', str(exc), 403)
+    except client.ProviderError as exc:
+        raise _unavailable(exc)
+    return jsonify(result), status
 
 
 @bp.get('/cases/<code>/inconsistencies')

@@ -2,6 +2,7 @@ import { ChangePasswordForm } from '../components/ChangePasswordForm';
 import { usePreferences } from '../store/preferences';
 
 const OPTIONS = [
+  { key: 'darkMode', label: 'Modo nocturno', help: 'Usa superficies oscuras y acentos verde neón en el portal y el escritorio.' },
   { key: 'bigText', label: 'Texto ampliado', help: 'Aumenta el tamaño del texto en toda la aplicación.' },
   { key: 'highContrast', label: 'Alto contraste', help: 'Refuerza los colores de texto y bordes.' },
   { key: 'reduceMotion', label: 'Reducir animaciones', help: 'Elimina transiciones y movimientos no esenciales.' },
